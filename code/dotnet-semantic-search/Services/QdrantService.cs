@@ -55,7 +55,13 @@ public class QdrantService
                 new {
                     id = blogPost.Id,
                     vector = blogPost.Vector,
-                    payload = new { title = blogPost.Title, url = blogPost.Url }
+                    payload = new
+                    {
+                        title = blogPost.Title,
+                        url = blogPost.Url,
+                        parent_post_id = blogPost.Id,
+                        chunk_index = 0
+                    }
                 }
             }
         };
@@ -64,30 +70,79 @@ public class QdrantService
         return blogPost;
     }
 
+    public async Task SaveBlogPostChunksAsync(
+        string parentPostId,
+        string title,
+        string url,
+        IReadOnlyList<(int chunkIndex, float[] vector)> chunks)
+    {
+        if (chunks.Count == 0)
+        {
+            return;
+        }
+
+        var urlUpsert = $"{_endpoint}/collections/{_collection}/points";
+        var points = chunks.Select(c => new
+        {
+            id = Guid.NewGuid().ToString(),
+            vector = c.vector,
+            payload = new
+            {
+                title,
+                url,
+                parent_post_id = parentPostId,
+                chunk_index = c.chunkIndex
+            }
+        }).ToArray();
+
+        var resp = await _http.PutAsJsonAsync(urlUpsert, new { points });
+        resp.EnsureSuccessStatusCode();
+    }
+
     public async Task<List<BlogPost>> SearchSimilarBlogPostsAsync(float[] queryVector, int maxResults = 5)
     {
         var url = $"{_endpoint}/collections/{_collection}/points/search";
         var payload = new
         {
             vector = queryVector,
-            limit = maxResults,
+            limit = Math.Max(maxResults * 6, 24),
             with_payload = true,
             with_vector = false
         };
         var resp = await _http.PostAsJsonAsync(url, payload);
         resp.EnsureSuccessStatusCode();
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
-        var results = new List<BlogPost>();
+        var bestByParent = new Dictionary<string, (BlogPost post, float score)>(StringComparer.Ordinal);
+
         foreach (var hit in doc.RootElement.GetProperty("result").EnumerateArray())
         {
             var payloadEl = hit.GetProperty("payload");
-            results.Add(new BlogPost
+            var title = payloadEl.TryGetProperty("title", out var t) ? t.GetString() ?? string.Empty : string.Empty;
+            var postUrl = payloadEl.TryGetProperty("url", out var u) ? u.GetString() ?? string.Empty : string.Empty;
+            var parentId = payloadEl.TryGetProperty("parent_post_id", out var p)
+                ? p.GetString()
+                : null;
+            var pointId = hit.GetProperty("id").ToString();
+            var groupKey = !string.IsNullOrEmpty(parentId) ? parentId : pointId;
+            var score = hit.TryGetProperty("score", out var s) ? s.GetSingle() : 0f;
+
+            var blog = new BlogPost
             {
-                Id = hit.GetProperty("id").ToString(),
-                Title = payloadEl.TryGetProperty("title", out var t) ? t.GetString() ?? string.Empty : string.Empty,
-                Url = payloadEl.TryGetProperty("url", out var u) ? u.GetString() ?? string.Empty : string.Empty
-            });
+                Id = !string.IsNullOrEmpty(parentId) ? parentId : pointId,
+                Title = title,
+                Url = postUrl
+            };
+
+            if (!bestByParent.TryGetValue(groupKey, out var existing) || score > existing.score)
+            {
+                bestByParent[groupKey] = (blog, score);
+            }
         }
-        return results;
+
+        return bestByParent.Values
+            .OrderByDescending(x => x.score)
+            .Take(maxResults)
+            .Select(x => x.post)
+            .ToList();
     }
 }
