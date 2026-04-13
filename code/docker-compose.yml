@@ -2,6 +2,6 @@
 name: dotnet-semantic-search
 services:
   readme-only:
-    image: alpine:3.20
+    image: alpine:3.23
     command: ["true"]
     profiles: ["unused"]
