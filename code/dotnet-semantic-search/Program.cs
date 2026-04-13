@@ -5,18 +5,19 @@ using MicrosoftExtensionsAiSample.Models;
 
 IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null;
 
-// Initialize Qdrant service
-QdrantService vectorService;
+// Initialize Azure Cosmos DB (NoSQL + vector search)
+CosmosDbService vectorService;
 try
 {
-    vectorService = new QdrantService();
+    vectorService = new CosmosDbService();
     await vectorService.InitializeAsync();
-    Console.WriteLine("✅ Qdrant ready at http://localhost:6333");
+    Console.WriteLine("✅ Cosmos DB container ready for vector search");
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"❌ Failed to connect to Qdrant: {ex.Message}");
-    Console.WriteLine("Make sure Qdrant is running: docker run -p 6333:6333 qdrant/qdrant");
+    Console.WriteLine($"❌ Failed to initialize Cosmos DB: {ex.Message}");
+    Console.WriteLine("Set COSMOS_CONNECTION_STRING or COSMOS_ENDPOINT + COSMOS_KEY.");
+    Console.WriteLine("Enable vector search on the account (EnableNoSQLVectorSearch) if queries fail.");
     return;
 }
 
@@ -59,6 +60,7 @@ while (true)
 
         case "3":
             Console.WriteLine("👋 Goodbye!");
+            vectorService.Dispose();
             return;
 
         default:
@@ -69,7 +71,7 @@ while (true)
     PauseIfInteractive("\nPress any key to continue...");
 }
 
-static async Task ProcessBlogsAsync(IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator, QdrantService vectorService)
+static async Task ProcessBlogsAsync(IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator, CosmosDbService vectorService)
 {
     try
     {
@@ -143,7 +145,7 @@ static async Task ProcessBlogsAsync(IEmbeddingGenerator<string, Embedding<float>
     }
 }
 
-static async Task SearchBlogsAsync(IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator, QdrantService vectorService)
+static async Task SearchBlogsAsync(IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator, CosmosDbService vectorService)
 {
     try
     {

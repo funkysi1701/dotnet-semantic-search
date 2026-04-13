@@ -1,26 +1,26 @@
 # .NET Semantic Search Demo
 
-A .NET application demonstrating semantic search capabilities using AI embeddings with Qdrant vector database and Ollama for local AI model inference.
+A .NET application demonstrating semantic search capabilities using AI embeddings with **Azure Cosmos DB for NoSQL** (vector search) and **Ollama** for local embedding inference.
 
 ## Features
 
 - 📚 **Blog Post Processing**: Retrieves blog posts from RSS feeds and generates embeddings
 - 🔍 **Semantic Search**: Search through blog posts using natural language queries
 - 🎯 **Vector Similarity**: Uses AI embeddings to find semantically similar content
-- 🐳 **Hybrid Setup**: Qdrant runs in Docker, Ollama runs locally for optimal performance
+- ☁️ **Cosmos DB**: Embeddings and metadata stored in Azure Cosmos DB for NoSQL with native vector indexing
 
 ## Architecture
 
-- **Vector Database**: Qdrant (running in Docker)
+- **Vector Database**: Azure Cosmos DB for NoSQL (`VectorDistance` queries, 768-d cosine)
 - **AI Embeddings**: Ollama with `nomic-embed-text` model (local installation)
-- **Framework**: .NET 9
+- **Framework**: .NET 10
 - **AI Integration**: Microsoft.Extensions.AI
 
 ## Prerequisites
 
 ### Required
-- [Docker](https://docs.docker.com/get-docker/) installed and running
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- An [Azure Cosmos DB for NoSQL](https://learn.microsoft.com/azure/cosmos-db/how-to-create-account) account with **vector search** enabled ([EnableNoSQLVectorSearch](https://learn.microsoft.com/azure/cosmos-db/vector-search))
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ### Platform-Specific Tools
 - **macOS**: [Homebrew](https://brew.sh/) (recommended for Ollama installation)
@@ -29,13 +29,10 @@ A .NET application demonstrating semantic search capabilities using AI embedding
 
 ### Verify Prerequisites
 ```bash
-# Check Docker
-docker --version
-
 # Check .NET
 dotnet --version
 
-# Should show .NET 9.0 or later
+# Should show .NET 10.0 or later
 ```
 
 ## Setup Instructions
@@ -51,22 +48,22 @@ cd dotnet-semantic-search/code
 dotnet build
 ```
 
-### 2. Set Up Qdrant (Vector Database)
+### 2. Set Up Azure Cosmos DB (vector store)
 
-Qdrant runs in Docker for easy setup and management:
+1. Create a Cosmos DB for NoSQL account and enable **Vector Search in Azure Cosmos DB for NoSQL** (portal **Features** or Azure CLI `EnableNoSQLVectorSearch`). Propagation can take several minutes.
+2. Copy the **URI** and **PRIMARY KEY** (or a connection string).
+3. Set environment variables before `dotnet run` (PowerShell examples):
 
-```bash
-# Start Qdrant using Docker Compose
-docker compose up -d
-
-# Verify Qdrant is running
-docker ps
+```powershell
+$env:COSMOS_CONNECTION_STRING = "AccountEndpoint=https://<account>.documents.azure.com:443/;AccountKey=<key>;"
+# Optional overrides (defaults shown):
+# $env:COSMOS_DATABASE = "semantic-search-blog"
+# $env:COSMOS_CONTAINER = "blog-embeddings"
 ```
 
-Qdrant will be available at:
-- **HTTP API**: http://localhost:6333
-- **Web UI**: http://localhost:6333/dashboard
-- **gRPC**: localhost:6334
+Alternatively use `COSMOS_ENDPOINT` and `COSMOS_KEY` instead of `COSMOS_CONNECTION_STRING`.
+
+The app creates the database and container on first run (768-dimensional cosine vectors on `/vector`, partition key `/id`).
 
 ### 3. Set Up Ollama (AI Model)
 
@@ -150,7 +147,7 @@ The application provides a simple menu interface:
 ### 1. 📚 Process Blog Posts
 - Retrieves blog posts from configured RSS feeds
 - Generates AI embeddings for each post
-- Stores embeddings in Qdrant vector database
+- Stores embeddings in Azure Cosmos DB
 - **First time setup**: Choose this option to populate the database
 
 ### 2. 🔍 Search Blog Posts
@@ -174,18 +171,11 @@ The application is configured to process blog posts from Trailhead Technology's 
 
 ## Troubleshooting
 
-### Qdrant Issues
+### Cosmos DB issues
 
-```bash
-# Check if Qdrant container is running
-docker ps
-
-# View Qdrant logs
-docker compose logs qdrant
-
-# Restart Qdrant
-docker compose restart qdrant
-```
+- Confirm **vector search** is enabled on the account and wait for the capability to apply.
+- Ensure `COSMOS_CONNECTION_STRING` or `COSMOS_ENDPOINT` + `COSMOS_KEY` are set in the same shell session as `dotnet run`.
+- Vector indexing applies only to **new** containers; if you change vector settings, use a new container name or database and re-ingest.
 
 ### Ollama Issues
 
@@ -249,28 +239,29 @@ dotnet clean && dotnet build
 
 ## Performance Notes
 
-- **Qdrant in Docker**: Provides consistent performance and easy management
-- **Ollama Local**: Running Ollama locally (not in Docker) provides significantly better performance for AI model inference
+- **Cosmos DB**: Request charges depend on indexing, RU/s or serverless configuration, and result size
+- **Ollama Local**: Running Ollama locally provides better latency for embedding generation
 - **First Run**: Initial blog post processing may take several minutes depending on the number of posts
-- **Embeddings**: Generated once and cached in Qdrant for fast retrieval
+- **Embeddings**: Stored in Cosmos DB and queried with `VectorDistance`
 
 ## Technical Details
 
 ### Dependencies
+- `Microsoft.Azure.Cosmos` - Cosmos DB for NoSQL client (vector policy + `VectorDistance` queries)
 - `Microsoft.Extensions.AI` - AI abstraction layer
 - `Microsoft.Extensions.AI.Ollama` - Ollama integration
 - `Spectre.Console` - Enhanced console output
-- Custom services for Qdrant integration and blog retrieval
+- Custom services for Cosmos DB and blog retrieval
 
-### Vector Database Schema
-- **Collection**: Blog posts with metadata
-- **Vectors**: 768-dimensional embeddings
-- **Metadata**: Title, content, URL, publish date
+### Vector store schema (container items)
+- **Partition key**: `/id` (one item per chunk or single-chunk post)
+- **Vectors**: `vector`: 768-dimensional `float32`, cosine distance
+- **Metadata**: `title`, `url`, `parent_post_id`, `chunk_index`
 
 ### Search Algorithm
 1. Convert search query to embedding using Ollama
-2. Perform vector similarity search in Qdrant
-3. Return top-k results with similarity scores
+2. Run a Cosmos SQL query ordering by `VectorDistance(c.vector, @embedding)`
+3. Merge hits by `parent_post_id` and return top unique posts
 4. Display results with metadata
 
 ## Development
@@ -283,7 +274,7 @@ dotnet-semantic-search/
 │   ├── BlogPost.cs        # Blog post model
 │   └── EmbeddingDocument.cs # Vector document model
 ├── Services/              # Business logic
-│   ├── QdrantService.cs   # Vector database operations
+│   ├── CosmosDbService.cs # Cosmos DB vector operations
 │   └── BlogRetrievalService.cs # RSS feed processing
 └── Utils/                 # Utilities
     ├── ConsoleHelper.cs   # Console UI helpers
@@ -291,7 +282,7 @@ dotnet-semantic-search/
 ```
 
 ### Adding New Features
-- Extend `QdrantService` for new vector operations
+- Extend `CosmosDbService` for new vector operations
 - Modify `BlogRetrievalService` for different content sources
 - Update models for additional metadata fields
 
