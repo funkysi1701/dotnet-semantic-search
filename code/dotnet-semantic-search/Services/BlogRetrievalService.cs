@@ -61,6 +61,18 @@ public static class BlogRetrievalService
                     string urlItem = item.Element("link")?.Value ?? "";
                     var categories = item.Elements("category").Select(c => c.Value).ToList();
 
+                    // Stable id for Cosmos parent_post_id (default BlogPost.Id would be a new GUID every fetch).
+                    var stableId = item.Element("guid")?.Value?.Trim();
+                    if (string.IsNullOrEmpty(stableId))
+                    {
+                        stableId = urlItem.Trim();
+                    }
+
+                    if (string.IsNullOrEmpty(stableId))
+                    {
+                        stableId = Guid.NewGuid().ToString();
+                    }
+
                     var imageUrl = TryExtractFirstImageUrl(content);
                     if (imageUrl is null && encoded is not null && description is not null)
                     {
@@ -69,6 +81,7 @@ public static class BlogRetrievalService
 
                     var blogPost = new BlogPost
                     {
+                        Id = stableId,
                         Title = title,
                         Content = content,
                         Url = urlItem,

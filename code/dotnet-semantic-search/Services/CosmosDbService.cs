@@ -289,11 +289,55 @@ public sealed class CosmosDbService : IDisposable
             }
         }
 
-        return bestByParent.Values
-            .OrderBy(x => x.dist)
-            .Take(maxResults)
-            .Select(x => x.post)
-            .ToList();
+        // Same permalink can appear under different parent_post_id values (e.g. legacy rows from
+        // random GUID ids per RSS fetch). Keep the single best-scoring row per canonical URL.
+        var ranked = bestByParent.Values.OrderBy(x => x.dist).ToList();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var results = new List<BlogPost>();
+        foreach (var entry in ranked)
+        {
+            var key = PostEquivalenceKey(entry.post);
+            if (!seen.Add(key))
+            {
+                continue;
+            }
+
+            results.Add(entry.post);
+            if (results.Count >= maxResults)
+            {
+                break;
+            }
+        }
+
+        return results;
+    }
+
+    private static string PostEquivalenceKey(BlogPost p)
+    {
+        if (!string.IsNullOrWhiteSpace(p.Url))
+        {
+            return NormalizePostUrl(p.Url);
+        }
+
+        return "id:" + p.Id;
+    }
+
+    private static string NormalizePostUrl(string url)
+    {
+        var trimmed = url.Trim();
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri))
+        {
+            return trimmed.ToLowerInvariant();
+        }
+
+        var path = uri.AbsolutePath;
+        if (path.Length > 1 && path.EndsWith('/'))
+        {
+            path = path.TrimEnd('/');
+        }
+
+        return $"{uri.Scheme.ToLowerInvariant()}://{uri.Host.ToLowerInvariant()}{path}{uri.Query}"
+            .ToLowerInvariant();
     }
 
     public void Dispose() => _client.Dispose();
