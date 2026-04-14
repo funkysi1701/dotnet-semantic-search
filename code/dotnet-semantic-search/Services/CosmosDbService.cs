@@ -402,7 +402,6 @@ public sealed class CosmosDbService : IDisposable
         }
 
         var tokens = TokenizeLexical(lexicalQuery);
-        var phrase = CollapseWhitespaceLower(lexicalQuery);
 
         var vectorRankByKey = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < candidates.Count; i++)
@@ -411,8 +410,11 @@ public sealed class CosmosDbService : IDisposable
         }
 
         var lexicalOrdered = candidates
-            .Select(c => (c.post, c.dist, score: LexicalTitleUrlScore(c.post.Title, c.post.Url, tokens, phrase)))
+            .Select(c => (c.post, c.dist, score: LexicalTitleUrlScore(c.post.Title, c.post.Url, tokens, lexicalQuery)))
             .OrderByDescending(x => x.score)
+            // Among equal title match tier, prefer the shorter title (e.g. exact "I love Nagios" over "I love Nagios — part 2").
+            .ThenBy(x => CollapseWhitespaceLower(x.post.Title).Length)
+            // Do not let synthetic merge distance bury a strong title match behind weak vector neighbours.
             .ThenBy(x => x.dist)
             .ToList();
 
@@ -422,6 +424,11 @@ public sealed class CosmosDbService : IDisposable
             lexicalRankByKey[PostEquivalenceKey(lexicalOrdered[i].post)] = i + 1;
         }
 
+        var lexScoreByKey = lexicalOrdered.ToDictionary(
+            x => PostEquivalenceKey(x.post),
+            x => x.score,
+            StringComparer.Ordinal);
+
         return candidates
             .Select(c =>
             {
@@ -429,9 +436,13 @@ public sealed class CosmosDbService : IDisposable
                 var vr = vectorRankByKey[key];
                 var lr = lexicalRankByKey[key];
                 var rrf = (1f / (rrfK + vr)) + lexicalRrfWeight * (1f / (rrfK + lr));
-                return (c.post, rrf);
+                var lex = lexScoreByKey[key];
+                return (c.post, rrf, lex);
             })
-            .OrderByDescending(x => x.rrf)
+            // Lexical score reflects exact/substring title match strength; use it before RRF so
+            // "I love Nagios" is not ranked under 20 posts that only share vector similarity.
+            .OrderByDescending(x => x.lex)
+            .ThenByDescending(x => x.rrf)
             .Take(maxResults)
             .Select(x => x.post)
             .ToList();
@@ -459,11 +470,53 @@ public sealed class CosmosDbService : IDisposable
         return Regex.Replace(query.Trim().ToLowerInvariant(), @"\s+", " ");
     }
 
-    private static int LexicalTitleUrlScore(string title, string url, List<string> tokens, string phraseLower)
+    private static string CollapseWhitespace(string value)
     {
+        return Regex.Replace(value.Trim(), @"\s+", " ");
+    }
+
+    /// <summary>Lexical score for title/URL; exact title matches (normalized) dominate ordering before RRF.</summary>
+    private static int LexicalTitleUrlScore(string title, string url, List<string> tokens, string lexicalQueryTrim)
+    {
+        var queryTrim = lexicalQueryTrim.Trim();
+        if (queryTrim.Length == 0)
+        {
+            return 0;
+        }
+
+        var normQuery = CollapseWhitespaceLower(lexicalQueryTrim);
+        var normTitle = CollapseWhitespaceLower(title);
         var tl = title.ToLowerInvariant();
         var ul = url.ToLowerInvariant();
         var score = 0;
+
+        // Exact string match in title (whitespace collapsed only; case-sensitive).
+        if (CollapseWhitespace(title) == CollapseWhitespace(lexicalQueryTrim))
+        {
+            score += 120_000;
+        }
+        // Full-title match ignoring case.
+        else if (normTitle.Length > 0 && normTitle == normQuery)
+        {
+            score += 80_000;
+        }
+        else if (normQuery.Length >= 3 && normTitle.Length > 0)
+        {
+            // Exact query as contiguous substring in title, strongest first.
+            if (normTitle.StartsWith(normQuery, StringComparison.Ordinal))
+            {
+                score += 12_000;
+            }
+            else if (normTitle.EndsWith(normQuery, StringComparison.Ordinal))
+            {
+                score += 6_000;
+            }
+            else if (normTitle.Contains(normQuery, StringComparison.Ordinal))
+            {
+                score += 2_400;
+            }
+        }
+
         foreach (var t in tokens)
         {
             if (tl.Contains(t, StringComparison.Ordinal))
@@ -474,11 +527,6 @@ public sealed class CosmosDbService : IDisposable
             {
                 score += 1;
             }
-        }
-
-        if (phraseLower.Length >= 3 && tl.Contains(phraseLower, StringComparison.Ordinal))
-        {
-            score += 28;
         }
 
         return score;
