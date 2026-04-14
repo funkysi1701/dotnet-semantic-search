@@ -13,14 +13,14 @@ A .NET application demonstrating semantic search capabilities using AI embedding
 
 - **Vector Database**: Azure Cosmos DB for NoSQL (`VectorDistance` queries, 768-d cosine)
 - **AI Embeddings**: Ollama with `nomic-embed-text` model (local installation)
-- **Framework**: .NET 10
+- **Framework**: .NET 9
 - **AI Integration**: Microsoft.Extensions.AI
 
 ## Prerequisites
 
 ### Required
 - An [Azure Cosmos DB for NoSQL](https://learn.microsoft.com/azure/cosmos-db/how-to-create-account) account with **vector search** enabled ([EnableNoSQLVectorSearch](https://learn.microsoft.com/azure/cosmos-db/vector-search))
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
 
 ### Platform-Specific Tools
 - **macOS**: [Homebrew](https://brew.sh/) (recommended for Ollama installation)
@@ -32,7 +32,7 @@ A .NET application demonstrating semantic search capabilities using AI embedding
 # Check .NET
 dotnet --version
 
-# Should show .NET 10.0 or later
+# Should show .NET 9.0 or later
 ```
 
 ## Setup Instructions
