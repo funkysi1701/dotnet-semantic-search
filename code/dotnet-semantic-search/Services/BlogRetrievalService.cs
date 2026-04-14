@@ -53,13 +53,19 @@ public static class BlogRetrievalService
                     // Extract title, content, category, tags, and URL from each <item>
                     string title = item.Element("title")?.Value ?? "No Title";
 
-                    // Try to get full content first, fallback to description if not available
-                    string content = item.Element(XName.Get("encoded", "http://purl.org/rss/1.0/modules/content/"))?.Value
-                                    ?? item.Element("description")?.Value
-                                    ?? "No Content";
+                    // Full post body (Hugo often omits content:encoded; summary images may live only in <description>.)
+                    var encoded = item.Element(XName.Get("encoded", "http://purl.org/rss/1.0/modules/content/"))?.Value;
+                    var description = item.Element("description")?.Value;
+                    string content = encoded ?? description ?? "No Content";
 
                     string urlItem = item.Element("link")?.Value ?? "";
                     var categories = item.Elements("category").Select(c => c.Value).ToList();
+
+                    var imageUrl = TryExtractFirstImageUrl(content);
+                    if (imageUrl is null && encoded is not null && description is not null)
+                    {
+                        imageUrl = TryExtractFirstImageUrl(encoded) ?? TryExtractFirstImageUrl(description);
+                    }
 
                     var blogPost = new BlogPost
                     {
@@ -67,7 +73,7 @@ public static class BlogRetrievalService
                         Content = content,
                         Url = urlItem,
                         Categories = categories,
-                        ImageUrl = TryExtractFirstImageUrl(content)
+                        ImageUrl = imageUrl
                     };
 
                     blogPost.GenerateCombinedText();

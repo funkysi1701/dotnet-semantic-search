@@ -96,6 +96,8 @@
 </main>
 
 @code {
+    private static readonly JsonSerializerOptions ApiJson = new(JsonSerializerDefaults.Web);
+
     private string query = string.Empty;
     private bool isLoading;
     private bool hasSearched;
@@ -117,7 +119,7 @@
         hasSearched = true;
         try
         {
-            var response = await Http.PostAsJsonAsync("api/search", new SearchRequest(query.Trim(), 10));
+            var response = await Http.PostAsJsonAsync("api/search", new SearchRequest(query.Trim(), 10), ApiJson);
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync();
@@ -127,7 +129,7 @@
                 return;
             }
 
-            var list = await response.Content.ReadFromJsonAsync<List<SearchResultItem>>();
+            var list = await response.Content.ReadFromJsonAsync<List<SearchResultItem>>(ApiJson);
             if (list is { Count: > 0 })
             {
                 results.AddRange(list);
