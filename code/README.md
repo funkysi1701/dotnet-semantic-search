@@ -52,7 +52,33 @@ dotnet build
 
 1. Create a Cosmos DB for NoSQL account and enable **Vector Search in Azure Cosmos DB for NoSQL** (portal **Features** or Azure CLI `EnableNoSQLVectorSearch`). Propagation can take several minutes.
 2. Copy the **URI** and **PRIMARY KEY** (or a connection string).
-3. Set environment variables before `dotnet run` (PowerShell examples):
+
+3. **Store credentials securely (do not commit secrets to git).** The app loads configuration in this order: `appsettings.json` → `appsettings.{DOTNET_ENVIRONMENT}.json` → **environment variables** → **user secrets** (user secrets override the same key from environment, so a blank `Cosmos__ConnectionString` in your profile does not wipe a secret).
+
+**Recommended for local development — user secrets** (run commands from the **`code/dotnet-semantic-search`** folder, or pass `--project` to that `.csproj` so they bind to the same `UserSecretsId` as the app):
+
+```bash
+cd dotnet-semantic-search
+dotnet user-secrets set "Cosmos:ConnectionString" "AccountEndpoint=https://<account>.documents.azure.com:443/;AccountKey=<key>;"
+```
+
+From the repo root:
+
+```bash
+dotnet user-secrets set "Cosmos:ConnectionString" "AccountEndpoint=...;AccountKey=...;" --project code/dotnet-semantic-search/dotnet-semantic-search.csproj
+dotnet user-secrets list --project code/dotnet-semantic-search/dotnet-semantic-search.csproj
+```
+
+Optional: override database or container name (defaults match `appsettings.json`):
+
+```bash
+dotnet user-secrets set "Cosmos:Database" "semantic-search-blog"
+dotnet user-secrets set "Cosmos:Container" "blog-embeddings"
+```
+
+**Optional file-based overrides:** copy `appsettings.json` to `appsettings.Development.local.json`, add your `Cosmos` values, and keep that file untracked (it is listed in `.gitignore`). Do not put secrets in committed `appsettings*.json` files.
+
+**CI / shells — environment variables** (PowerShell example):
 
 ```powershell
 $env:COSMOS_CONNECTION_STRING = "AccountEndpoint=https://<account>.documents.azure.com:443/;AccountKey=<key>;"
@@ -174,7 +200,8 @@ The application is configured to process blog posts from Trailhead Technology's 
 ### Cosmos DB issues
 
 - Confirm **vector search** is enabled on the account and wait for the capability to apply.
-- Ensure `COSMOS_CONNECTION_STRING` or `COSMOS_ENDPOINT` + `COSMOS_KEY` are set in the same shell session as `dotnet run`.
+- Ensure credentials are available: `dotnet user-secrets list --project code/dotnet-semantic-search/dotnet-semantic-search.csproj`, or `COSMOS_CONNECTION_STRING` / `COSMOS_ENDPOINT` + `COSMOS_KEY` in the environment for the same process as `dotnet run`.
+- If user secrets are set but the app still cannot connect, check for **empty** `Cosmos__ConnectionString`, `COSMOS_CONNECTION_STRING`, or `COSMOS_KEY` in **user or machine** environment variables (they used to override secrets when env was applied last; the app now applies secrets after env, but clearing stale empty vars still avoids confusion).
 - Vector indexing applies only to **new** containers; if you change vector settings, use a new container name or database and re-ingest.
 
 ### Ollama Issues

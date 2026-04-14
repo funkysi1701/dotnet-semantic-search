@@ -1,7 +1,22 @@
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using MicrosoftExtensionsAiSample.Utils;
 using MicrosoftExtensionsAiSample.Services;
 using MicrosoftExtensionsAiSample.Models;
+
+// Order matters: environment variables first, then user secrets, so local secrets override
+// empty or placeholder machine env (e.g. Cosmos__ConnectionString=). CI agents without a
+// secrets store still get values from environment only.
+var configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+    .AddJsonFile(
+        $"appsettings.{Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ?? "Production"}.json",
+        optional: true,
+        reloadOnChange: false)
+    .AddEnvironmentVariables()
+    .AddUserSecrets(typeof(CosmosDbService).Assembly)
+    .Build();
 
 IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null;
 
@@ -9,14 +24,17 @@ IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null;
 CosmosDbService vectorService;
 try
 {
-    vectorService = new CosmosDbService();
+    vectorService = new CosmosDbService(configuration);
     await vectorService.InitializeAsync();
     Console.WriteLine("✅ Cosmos DB container ready for vector search");
 }
 catch (Exception ex)
 {
     Console.WriteLine($"❌ Failed to initialize Cosmos DB: {ex.Message}");
-    Console.WriteLine("Set COSMOS_CONNECTION_STRING or COSMOS_ENDPOINT + COSMOS_KEY.");
+    Console.WriteLine("Use (from code/dotnet-semantic-search): dotnet user-secrets set \"Cosmos:ConnectionString\" \"AccountEndpoint=...;AccountKey=...;\"");
+    Console.WriteLine("Verify: dotnet user-secrets list --project dotnet-semantic-search.csproj");
+    Console.WriteLine("Or set COSMOS_CONNECTION_STRING / COSMOS_ENDPOINT + COSMOS_KEY in the environment.");
+    Console.WriteLine("If secrets exist but are ignored, remove empty Cosmos__ConnectionString / COSMOS_* from machine or user environment.");
     Console.WriteLine("Enable vector search on the account (EnableNoSQLVectorSearch) if queries fail.");
     return;
 }

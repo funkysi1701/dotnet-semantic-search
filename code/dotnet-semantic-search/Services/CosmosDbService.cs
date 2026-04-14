@@ -3,13 +3,15 @@ using System.Net;
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Extensions.Configuration;
 using MicrosoftExtensionsAiSample.Models;
 
 namespace MicrosoftExtensionsAiSample.Services;
 
 /// <summary>
 /// Azure Cosmos DB for NoSQL with vector indexing (nomic-embed-text: 768 dims, cosine).
-/// Requires account capability <c>EnableNoSQLVectorSearch</c> and env <see cref="ResolveCredentials"/>.
+/// Credentials are read from <see cref="IConfiguration"/> (JSON, then environment, then user secrets so local secrets win over empty env placeholders).
+/// Prefer <c>dotnet user-secrets set "Cosmos:ConnectionString" "..."</c> for local development.
 /// </summary>
 public sealed class CosmosDbService : IDisposable
 {
@@ -20,79 +22,111 @@ public sealed class CosmosDbService : IDisposable
     private readonly string _containerName;
     private Container? _container;
 
-    public CosmosDbService(
-        string? endpoint = null,
-        string? authKey = null,
-        string? databaseName = null,
-        string? containerName = null)
+    public CosmosDbService(IConfiguration configuration)
     {
-        if (!string.IsNullOrEmpty(endpoint) && !string.IsNullOrEmpty(authKey))
-        {
-            _client = new CosmosClient(endpoint, authKey, new CosmosClientOptions
-            {
-                ApplicationName = "dotnet-semantic-search"
-            });
-        }
-        else
-        {
-            var (ep, key) = ResolveCredentials();
-            _client = new CosmosClient(ep, key, new CosmosClientOptions
-            {
-                ApplicationName = "dotnet-semantic-search"
-            });
-        }
+        ArgumentNullException.ThrowIfNull(configuration);
 
-        _databaseName = databaseName
-            ?? Environment.GetEnvironmentVariable("COSMOS_DATABASE")
+        var (ep, key) = ResolveCredentials(configuration);
+        _client = new CosmosClient(ep, key, new CosmosClientOptions
+        {
+            ApplicationName = "dotnet-semantic-search"
+        });
+
+        _databaseName = FirstNonEmpty(
+            configuration,
+            "COSMOS_DATABASE",
+            "Cosmos:Database")
             ?? "semantic-search-blog";
-        _containerName = containerName
-            ?? Environment.GetEnvironmentVariable("COSMOS_CONTAINER")
+
+        _containerName = FirstNonEmpty(
+            configuration,
+            "COSMOS_CONTAINER",
+            "Cosmos:Container")
             ?? "blog-embeddings";
     }
 
-    private static (string Endpoint, string Key) ResolveCredentials()
+    private static (string Endpoint, string Key) ResolveCredentials(IConfiguration configuration)
     {
-        var conn = Environment.GetEnvironmentVariable("COSMOS_CONNECTION_STRING");
-        if (!string.IsNullOrWhiteSpace(conn))
+        var conn = FirstNonEmpty(
+            configuration,
+            "COSMOS_CONNECTION_STRING",
+            "Cosmos:ConnectionString",
+            "ConnectionStrings:COSMOS",
+            "ConnectionStrings:Cosmos");
+
+        if (!string.IsNullOrWhiteSpace(conn) && TryParseAccountConnectionString(conn, out var endpoint, out var accountKey))
         {
-            string? ep = null, ky = null;
-            foreach (var segment in conn.Split(';', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var eq = segment.IndexOf('=');
-                if (eq <= 0)
-                {
-                    continue;
-                }
-
-                var name = segment[..eq].Trim();
-                var value = segment[(eq + 1)..].Trim();
-                if (name.Equals("AccountEndpoint", StringComparison.OrdinalIgnoreCase))
-                {
-                    ep = value;
-                }
-                else if (name.Equals("AccountKey", StringComparison.OrdinalIgnoreCase))
-                {
-                    ky = value;
-                }
-            }
-
-            if (!string.IsNullOrEmpty(ep) && !string.IsNullOrEmpty(ky))
-            {
-                return (ep.TrimEnd('/'), ky);
-            }
+            return (endpoint, accountKey);
         }
 
-        var endpoint = Environment.GetEnvironmentVariable("COSMOS_ENDPOINT")
-            ?? Environment.GetEnvironmentVariable("AZURE_COSMOS_ENDPOINT");
-        var key = Environment.GetEnvironmentVariable("COSMOS_KEY")
-            ?? Environment.GetEnvironmentVariable("COSMOS_ACCOUNT_KEY");
-        if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(key))
+        var ep = FirstNonEmpty(
+            configuration,
+            "COSMOS_ENDPOINT",
+            "AZURE_COSMOS_ENDPOINT",
+            "Cosmos:Endpoint");
+        var ky = FirstNonEmpty(
+            configuration,
+            "COSMOS_KEY",
+            "COSMOS_ACCOUNT_KEY",
+            "Cosmos:Key",
+            "Cosmos:AccountKey");
+        if (string.IsNullOrWhiteSpace(ep) || string.IsNullOrWhiteSpace(ky))
         {
             throw new InvalidOperationException(
-                "Configure Azure Cosmos DB: set COSMOS_CONNECTION_STRING, or COSMOS_ENDPOINT and COSMOS_KEY.");
+                "Configure Azure Cosmos DB: set user secret Cosmos:ConnectionString (see README), " +
+                "or COSMOS_CONNECTION_STRING / COSMOS_ENDPOINT + COSMOS_KEY environment variables.");
         }
 
-        return (endpoint.TrimEnd('/'), key);
+        return (ep.TrimEnd('/'), ky);
+    }
+
+    private static string? FirstNonEmpty(IConfiguration configuration, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var value = configuration[key];
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryParseAccountConnectionString(string connectionString, out string endpoint, out string key)
+    {
+        string? ep = null, ky = null;
+        foreach (var segment in connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var eq = segment.IndexOf('=');
+            if (eq <= 0)
+            {
+                continue;
+            }
+
+            var name = segment[..eq].Trim();
+            var value = segment[(eq + 1)..].Trim();
+            if (name.Equals("AccountEndpoint", StringComparison.OrdinalIgnoreCase))
+            {
+                ep = value;
+            }
+            else if (name.Equals("AccountKey", StringComparison.OrdinalIgnoreCase))
+            {
+                ky = value;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(ep) && !string.IsNullOrEmpty(ky))
+        {
+            endpoint = ep.TrimEnd('/');
+            key = ky;
+            return true;
+        }
+
+        endpoint = string.Empty;
+        key = string.Empty;
+        return false;
     }
 
     public async Task InitializeAsync()

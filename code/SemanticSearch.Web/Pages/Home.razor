@@ -1,0 +1,115 @@
+﻿@page "/"
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<PageTitle>Semantic blog search</PageTitle>
+
+<main class="page">
+    <header class="page__header">
+        <h1>Semantic blog search</h1>
+        <p class="page__lede">
+            Search the <strong>semantic-search-blog</strong> Cosmos DB database (vector index built with the console indexer and Ollama embeddings).
+        </p>
+    </header>
+
+    <section class="search" aria-label="Search">
+        <form class="search__form" @onsubmit="SearchAsync" @onsubmit:preventDefault="true">
+            <label class="search__label" for="q">Query</label>
+            <div class="search__row">
+                <input id="q"
+                       class="search__input"
+                       @bind="query"
+                       @bind:event="oninput"
+                       autocomplete="off"
+                       maxlength="500"
+                       placeholder="What do you want to find?"
+                       disabled="@isLoading" />
+                <button class="search__submit" type="submit" disabled="@isLoading">
+                    @(isLoading ? "Searching…" : "Search")
+                </button>
+            </div>
+        </form>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <p class="message message--error" role="alert">@errorMessage</p>
+    }
+
+    @if (results.Count > 0)
+    {
+        <section class="results" aria-label="Results">
+            <h2 class="results__title">@results.Count result@(results.Count == 1 ? "" : "s")</h2>
+            <ol class="results__list">
+                @foreach (var item in results)
+                {
+                    <li class="results__item">
+                        <a class="results__link" href="@item.Url" target="_blank" rel="noopener noreferrer">@item.Title</a>
+                    </li>
+                }
+            </ol>
+        </section>
+    }
+    else if (hasSearched && !isLoading && string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <p class="message">No posts matched that query.</p>
+    }
+</main>
+
+@code {
+    private string query = string.Empty;
+    private bool isLoading;
+    private bool hasSearched;
+    private string? errorMessage;
+    private readonly List<SearchResultItem> results = [];
+
+    private async Task SearchAsync()
+    {
+        errorMessage = null;
+        results.Clear();
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            errorMessage = "Enter a search query.";
+            return;
+        }
+
+        isLoading = true;
+        hasSearched = true;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/search", new SearchRequest(query.Trim(), 10));
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                errorMessage = string.IsNullOrWhiteSpace(body)
+                    ? $"Search failed ({(int)response.StatusCode})."
+                    : body;
+                return;
+            }
+
+            var list = await response.Content.ReadFromJsonAsync<List<SearchResultItem>>();
+            if (list is { Count: > 0 })
+            {
+                results.AddRange(list);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage =
+                "Could not reach the search API. Run SemanticSearch.Api locally (see code README) or set ApiBaseUrl in appsettings.";
+            if (!string.IsNullOrEmpty(ex.Message))
+            {
+                errorMessage += " " + ex.Message;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private sealed record SearchRequest(string Query, int MaxResults);
+
+    private sealed record SearchResultItem(string Id, string Title, string Url);
+}

@@ -6,6 +6,10 @@
 # dotenv files
 .env
 
+# Local-only app settings (never commit secrets)
+**/appsettings.*.local.json
+secrets.json
+
 # User-specific files
 *.rsuser
 *.suo
@@ -482,3 +486,4 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+code/SemanticSearch.Web/publish-out

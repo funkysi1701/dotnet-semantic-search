@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>semantic-search-api-b8e3d0f1-5c2a-4e0d-9b4c-3c7f0d2e5a81</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\dotnet-semantic-search\dotnet-semantic-search.csproj" />
+  </ItemGroup>
+
+</Project>
