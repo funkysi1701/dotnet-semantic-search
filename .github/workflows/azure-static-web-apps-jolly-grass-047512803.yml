@@ -28,9 +28,11 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "./code" # App source code path
-          api_location: "Api" # Api source code path - optional
-          output_location: "wwwroot" # Built app content directory - optional
+          # Blazor WebAssembly: Oryx must see a single .NET project folder (not the monorepo "code" root).
+          app_location: "code/SemanticSearch.Web"
+          # SemanticSearch.Api is ASP.NET Core, not Azure Functions — leave empty or deploy the API separately.
+          api_location: ""
+          output_location: "wwwroot"
           ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:
