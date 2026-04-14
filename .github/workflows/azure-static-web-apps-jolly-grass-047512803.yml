@@ -19,6 +19,13 @@ jobs:
         with:
           submodules: true
           lfs: false
+      # Publish Blazor WASM here so index.html gets real script names (#[.{fingerprint}] is not sent to the server
+      # if placeholders were left in place, the browser would only request /_framework/blazor.webassembly → 404).
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.x"
+      - name: Publish Blazor client
+        run: dotnet publish code/SemanticSearch.Web/SemanticSearch.Web.csproj -c Release -o blazor-publish
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
@@ -28,11 +35,12 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          # Blazor WebAssembly: Oryx must see a single .NET project folder (not the monorepo "code" root).
-          app_location: "code/SemanticSearch.Web"
+          # Pre-built WASM static files (Oryx was uploading project wwwroot and skipping fingerprint substitution).
+          app_location: "blazor-publish/wwwroot"
+          skip_app_build: true
           # Azure Functions isolated worker (.NET) — POST /api/search
           api_location: "code/SemanticSearch.Api"
-          output_location: "wwwroot"
+          output_location: ""
           ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:
