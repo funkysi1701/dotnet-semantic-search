@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json;
 using Microsoft.Extensions.Configuration;
@@ -246,14 +247,20 @@ public sealed class CosmosDbService : IDisposable
         }
     }
 
-    public async Task<List<BlogPost>> SearchSimilarBlogPostsAsync(float[] queryVector, int maxResults = 5)
+    /// <param name="lexicalQuery">When non-empty, merges vector order with title/URL token match ranks via RRF (reciprocal rank fusion).</param>
+    public async Task<List<BlogPost>> SearchSimilarBlogPostsAsync(
+        float[] queryVector,
+        int maxResults = 5,
+        string? lexicalQuery = null)
     {
         if (queryVector.Length != VectorDimensions)
         {
             throw new ArgumentException($"Expected {VectorDimensions} dimensions, got {queryVector.Length}.", nameof(queryVector));
         }
 
-        var top = Math.Max(maxResults * 6, 24);
+        // Wider candidate pool before per-post dedupe: small TOP drops recall when many chunks
+        // score similarly (e.g. many posts about the same topic). Trade-off: more RU / latency.
+        var top = Math.Max(maxResults * 25, 200);
         var sql =
             $"SELECT TOP {top} c.id, c.title, c.url, c.image_url, c.published_at, c.parent_post_id, VectorDistance(c.vector, @embedding) AS dist " +
             "FROM c ORDER BY VectorDistance(c.vector, @embedding)";
@@ -308,7 +315,7 @@ public sealed class CosmosDbService : IDisposable
         // random GUID ids per RSS fetch). Keep the single best-scoring row per canonical URL.
         var ranked = bestByParent.Values.OrderBy(x => x.dist).ToList();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var results = new List<BlogPost>();
+        var candidates = new List<(BlogPost post, double dist)>();
         foreach (var entry in ranked)
         {
             var key = PostEquivalenceKey(entry.post);
@@ -317,14 +324,115 @@ public sealed class CosmosDbService : IDisposable
                 continue;
             }
 
-            results.Add(entry.post);
-            if (results.Count >= maxResults)
+            candidates.Add((entry.post, entry.dist));
+        }
+
+        if (maxResults <= 0)
+        {
+            return [];
+        }
+
+        if (string.IsNullOrWhiteSpace(lexicalQuery))
+        {
+            return candidates.Take(maxResults).Select(c => c.post).ToList();
+        }
+
+        return RrfHybridRank(candidates, lexicalQuery.Trim(), maxResults);
+    }
+
+    /// <summary>Reciprocal rank fusion over vector distance order and lexical (title + URL) relevance.</summary>
+    private static List<BlogPost> RrfHybridRank(
+        List<(BlogPost post, double dist)> candidates,
+        string lexicalQuery,
+        int maxResults)
+    {
+        const float rrfK = 60f;
+        if (candidates.Count == 0)
+        {
+            return [];
+        }
+
+        var tokens = TokenizeLexical(lexicalQuery);
+        var phrase = CollapseWhitespaceLower(lexicalQuery);
+
+        var vectorRankByKey = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            vectorRankByKey[PostEquivalenceKey(candidates[i].post)] = i + 1;
+        }
+
+        var lexicalOrdered = candidates
+            .Select(c => (c.post, c.dist, score: LexicalTitleUrlScore(c.post.Title, c.post.Url, tokens, phrase)))
+            .OrderByDescending(x => x.score)
+            .ThenBy(x => x.dist)
+            .ToList();
+
+        var lexicalRankByKey = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < lexicalOrdered.Count; i++)
+        {
+            lexicalRankByKey[PostEquivalenceKey(lexicalOrdered[i].post)] = i + 1;
+        }
+
+        return candidates
+            .Select(c =>
             {
-                break;
+                var key = PostEquivalenceKey(c.post);
+                var vr = vectorRankByKey[key];
+                var lr = lexicalRankByKey[key];
+                var rrf = (1f / (rrfK + vr)) + (1f / (rrfK + lr));
+                return (c.post, rrf);
+            })
+            .OrderByDescending(x => x.rrf)
+            .Take(maxResults)
+            .Select(x => x.post)
+            .ToList();
+    }
+
+    private static readonly Regex LexicalTokenSplitter = new(@"[\s\p{P}]+", RegexOptions.Compiled);
+
+    private static List<string> TokenizeLexical(string query)
+    {
+        var s = query.Trim().ToLowerInvariant();
+        if (s.Length == 0)
+        {
+            return [];
+        }
+
+        return LexicalTokenSplitter
+            .Split(s)
+            .Where(t => t.Length >= 2)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static string CollapseWhitespaceLower(string query)
+    {
+        return Regex.Replace(query.Trim().ToLowerInvariant(), @"\s+", " ");
+    }
+
+    private static int LexicalTitleUrlScore(string title, string url, List<string> tokens, string phraseLower)
+    {
+        var tl = title.ToLowerInvariant();
+        var ul = url.ToLowerInvariant();
+        var score = 0;
+        foreach (var t in tokens)
+        {
+            if (tl.Contains(t, StringComparison.Ordinal))
+            {
+                score += 3;
+            }
+            else if (ul.Contains(t, StringComparison.Ordinal))
+            {
+                score += 1;
             }
         }
 
-        return results;
+        if (phraseLower.Length >= 3 && tl.Contains(phraseLower, StringComparison.Ordinal))
+        {
+            score += 12;
+        }
+
+        return score;
     }
 
     private static string PostEquivalenceKey(BlogPost p)

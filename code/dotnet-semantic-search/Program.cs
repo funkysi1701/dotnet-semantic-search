@@ -229,7 +229,10 @@ static async Task SearchBlogsAsync(IEmbeddingGenerator<string, Embedding<float>>
 
         var queryEmbedding = await embeddingGenerator.GenerateAsync(query);
 
-        var results = await vectorService.SearchSimilarBlogPostsAsync(queryEmbedding.Vector.ToArray(), maxResults: 5);
+        var results = await vectorService.SearchSimilarBlogPostsAsync(
+            queryEmbedding.Vector.ToArray(),
+            maxResults: 5,
+            lexicalQuery: query.Trim());
 
         if (results.Any())
         {

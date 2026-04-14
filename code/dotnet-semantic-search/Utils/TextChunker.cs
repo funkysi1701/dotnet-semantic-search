@@ -7,7 +7,7 @@ namespace MicrosoftExtensionsAiSample.Utils;
 internal static class TextChunker
 {
     /// <summary>~2–3k tokens typical for English prose; stays under common embedding model context limits.</summary>
-    public const int DefaultMaxChunkChars = 1_000;
+    public const int DefaultMaxChunkChars = 10_000;
 
     public const int DefaultOverlapChars = 400;
 
