@@ -7,6 +7,8 @@ namespace MicrosoftExtensionsAiSample.Services;
 
 public static class BlogRetrievalService
 {
+    /// <summary>Media RSS (mrss) namespace — <c>media:content</c> featured images.</summary>
+    private static readonly XNamespace Mrss = "http://search.yahoo.com/mrss/";
     public static async Task<List<BlogPost>> GetAllBlogPostsAsync()
     {
         var blogPosts = new List<BlogPost>();
@@ -73,10 +75,12 @@ public static class BlogRetrievalService
                         stableId = Guid.NewGuid().ToString();
                     }
 
-                    var imageUrl = TryExtractFirstImageUrl(content);
+                    var imageUrl = TryExtractMrssImageUrl(item)
+                        ?? TryExtractFirstImageUrlFromHtml(content);
                     if (imageUrl is null && encoded is not null && description is not null)
                     {
-                        imageUrl = TryExtractFirstImageUrl(encoded) ?? TryExtractFirstImageUrl(description);
+                        imageUrl = TryExtractFirstImageUrlFromHtml(encoded)
+                            ?? TryExtractFirstImageUrlFromHtml(description);
                     }
 
                     var blogPost = new BlogPost
@@ -107,8 +111,36 @@ public static class BlogRetrievalService
         return blogPosts;
     }
 
-    /// <summary>First absolute http(s) URL from an <c>img</c> <c>src</c> in HTML (RSS description / content).</summary>
-    private static string? TryExtractFirstImageUrl(string html)
+    /// <summary>First <c>media:content</c> with <c>medium="image"</c> (MRSS) on the RSS item.</summary>
+    private static string? TryExtractMrssImageUrl(XElement item)
+    {
+        foreach (var el in item.Elements(Mrss + "content"))
+        {
+            var medium = (string?)el.Attribute("medium");
+            if (!string.Equals(medium, "image", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var raw = el.Attribute("url")?.Value?.Trim();
+            if (string.IsNullOrEmpty(raw))
+            {
+                continue;
+            }
+
+            raw = WebUtility.HtmlDecode(raw);
+            if (Uri.TryCreate(raw, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            {
+                return uri.ToString();
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>First absolute http(s) URL from an <c>img</c> <c>src</c> in HTML (description / content fallback).</summary>
+    private static string? TryExtractFirstImageUrlFromHtml(string html)
     {
         if (string.IsNullOrWhiteSpace(html))
         {
