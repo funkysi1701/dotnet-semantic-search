@@ -64,6 +64,12 @@
                                 </span>
                             }
                             <span class="results__card-text">
+                                @if (item.PublishedAt is { } published)
+                                {
+                                    <span class="results__card-date">
+                                        <time datetime="@published.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@published.ToLocalTime().ToString("D", CultureInfo.CurrentCulture)</time>
+                                    </span>
+                                }
                                 <span class="results__card-title">@item.Title</span>
                                 <span class="results__card-meta">Read on funkysi1701.com <span class="results__card-arrow" aria-hidden="true">→</span></span>
                             </span>
@@ -156,5 +162,10 @@
 
     private sealed record SearchRequest(string Query, int MaxResults);
 
-    private sealed record SearchResultItem(string Id, string Title, string Url, string? ImageUrl = null);
+    private sealed record SearchResultItem(
+        string Id,
+        string Title,
+        string Url,
+        string? ImageUrl = null,
+        DateTimeOffset? PublishedAt = null);
 }

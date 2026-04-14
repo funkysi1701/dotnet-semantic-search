@@ -140,6 +140,7 @@ static async Task ProcessBlogsAsync(
                         blogPost.Title,
                         blogPost.Url,
                         blogPost.ImageUrl,
+                        blogPost.PublishedAt,
                         indexedVectors);
                 }
 

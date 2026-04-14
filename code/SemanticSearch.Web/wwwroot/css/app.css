@@ -307,6 +307,18 @@ body {
     flex: 1 1 auto;
 }
 
+.results__card-date {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #8fa3b8;
+}
+
+.results__card-date time {
+    font-weight: 600;
+}
+
 .results__card-link:hover {
     border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
     background: color-mix(in srgb, var(--surface) 100%, transparent);

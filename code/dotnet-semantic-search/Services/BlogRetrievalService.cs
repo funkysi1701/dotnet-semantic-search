@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -90,7 +91,8 @@ public static class BlogRetrievalService
                         Content = content,
                         Url = urlItem,
                         Categories = categories,
-                        ImageUrl = imageUrl
+                        ImageUrl = imageUrl,
+                        PublishedAt = TryParseRssPubDate(item.Element("pubDate")?.Value)
                     };
 
                     blogPost.GenerateCombinedText();
@@ -109,6 +111,26 @@ public static class BlogRetrievalService
         }
 
         return blogPosts;
+    }
+
+    /// <summary>RSS 2.0 <c>pubDate</c> (RFC 822 / similar).</summary>
+    private static DateTimeOffset? TryParseRssPubDate(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        if (DateTimeOffset.TryParse(
+                raw.Trim(),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal,
+                out var dto))
+        {
+            return dto;
+        }
+
+        return null;
     }
 
     /// <summary>First <c>media:content</c> with <c>medium="image"</c> (MRSS) on the RSS item.</summary>

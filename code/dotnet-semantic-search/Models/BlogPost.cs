@@ -19,6 +19,10 @@ public class BlogPost
     /// <summary>Optional featured/first image URL from the RSS HTML (e.g. first &lt;img src&gt;).</summary>
     [JsonProperty("imageUrl")]
     public string? ImageUrl { get; set; }
+
+    /// <summary>RSS <c>pubDate</c> (UTC when parsed).</summary>
+    [JsonProperty("publishedAt")]
+    public DateTimeOffset? PublishedAt { get; set; }
     
     [JsonProperty("categories")]
     public List<string> Categories { get; set; } = new();

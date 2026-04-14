@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Net;
 using System.Text;
 using Microsoft.Azure.Cosmos;
@@ -192,6 +193,7 @@ public sealed class CosmosDbService : IDisposable
             SanitizeFreeText(blogPost.Title),
             SanitizeFreeText(blogPost.Url),
             blogPost.ImageUrl,
+            blogPost.PublishedAt,
             blogPost.Vector);
 
         try
@@ -211,6 +213,7 @@ public sealed class CosmosDbService : IDisposable
         string title,
         string url,
         string? imageUrl,
+        DateTimeOffset? publishedAt,
         IReadOnlyList<(int chunkIndex, float[] vector)> chunks)
     {
         if (chunks.Count == 0)
@@ -229,6 +232,7 @@ public sealed class CosmosDbService : IDisposable
                 SanitizeFreeText(title),
                 SanitizeFreeText(url),
                 imageUrl,
+                publishedAt,
                 vector);
 
             try
@@ -251,7 +255,7 @@ public sealed class CosmosDbService : IDisposable
 
         var top = Math.Max(maxResults * 6, 24);
         var sql =
-            $"SELECT TOP {top} c.id, c.title, c.url, c.image_url, c.parent_post_id, VectorDistance(c.vector, @embedding) AS dist " +
+            $"SELECT TOP {top} c.id, c.title, c.url, c.image_url, c.published_at, c.parent_post_id, VectorDistance(c.vector, @embedding) AS dist " +
             "FROM c ORDER BY VectorDistance(c.vector, @embedding)";
 
         var query = new QueryDefinition(sql).WithParameter("@embedding", queryVector);
@@ -273,18 +277,29 @@ public sealed class CosmosDbService : IDisposable
                         imageUrl = prev.post.ImageUrl;
                     }
 
+                    var publishedAt = TryParsePublishedAt(row.PublishedAt);
+                    if (publishedAt is null && bestByParent.TryGetValue(groupKey, out var prevPub))
+                    {
+                        publishedAt = prevPub.post.PublishedAt;
+                    }
+
                     var blog = new BlogPost
                     {
                         Id = !string.IsNullOrEmpty(row.ParentPostId) ? row.ParentPostId : row.Id,
                         Title = row.Title ?? string.Empty,
                         Url = row.Url ?? string.Empty,
-                        ImageUrl = imageUrl
+                        ImageUrl = imageUrl,
+                        PublishedAt = publishedAt
                     };
                     bestByParent[groupKey] = (blog, row.Dist);
                 }
                 else if (!string.IsNullOrWhiteSpace(row.ImageUrl) && string.IsNullOrWhiteSpace(existing.post.ImageUrl))
                 {
                     existing.post.ImageUrl = row.ImageUrl;
+                }
+                else if (TryParsePublishedAt(row.PublishedAt) is { } rowPub && existing.post.PublishedAt is null)
+                {
+                    existing.post.PublishedAt = rowPub;
                 }
             }
         }
@@ -353,6 +368,7 @@ public sealed class CosmosDbService : IDisposable
         string title,
         string url,
         string? imageUrl,
+        DateTimeOffset? publishedAt,
         float[] vector)
     {
         var doc = new Dictionary<string, object?>
@@ -369,7 +385,31 @@ public sealed class CosmosDbService : IDisposable
             doc["image_url"] = SanitizeFreeText(imageUrl.Trim());
         }
 
+        if (publishedAt.HasValue)
+        {
+            doc["published_at"] = publishedAt.Value.ToString("o", CultureInfo.InvariantCulture);
+        }
+
         return doc;
+    }
+
+    private static DateTimeOffset? TryParsePublishedAt(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        if (DateTimeOffset.TryParse(
+                raw,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                out var dto))
+        {
+            return dto;
+        }
+
+        return null;
     }
 
     private static void ValidateEmbedding(float[] vector)
@@ -472,6 +512,9 @@ public sealed class CosmosDbService : IDisposable
 
         [JsonProperty("parent_post_id")]
         public string? ParentPostId { get; set; }
+
+        [JsonProperty("published_at")]
+        public string? PublishedAt { get; set; }
 
         [JsonProperty("dist")]
         public double Dist { get; set; }
