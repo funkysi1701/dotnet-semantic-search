@@ -53,6 +53,8 @@ catch (Exception ex)
 
 ConsoleHelper.ShowHeader();
 
+var maxEmbeddingConcurrency = GetMaxEmbeddingConcurrency(configuration);
+
 // Main menu loop
 while (true)
 {
@@ -67,7 +69,7 @@ while (true)
     switch (choice)
     {
         case "1":
-            await ProcessBlogsAsync(embeddingGenerator, vectorService);
+            await ProcessBlogsAsync(embeddingGenerator, vectorService, maxEmbeddingConcurrency);
             break;
 
         case "2":
@@ -87,7 +89,10 @@ while (true)
     PauseIfInteractive("\nPress any key to continue...");
 }
 
-static async Task ProcessBlogsAsync(IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator, CosmosDbService vectorService)
+static async Task ProcessBlogsAsync(
+    IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+    CosmosDbService vectorService,
+    int maxEmbeddingConcurrency)
 {
     try
     {
@@ -125,12 +130,10 @@ static async Task ProcessBlogsAsync(IEmbeddingGenerator<string, Embedding<float>
                 }
                 else
                 {
-                    var indexedVectors = new List<(int chunkIndex, float[] vector)>();
-                    for (var i = 0; i < chunks.Count; i++)
-                    {
-                        var embedding = await embeddingGenerator.GenerateAsync(chunks[i]);
-                        indexedVectors.Add((i, embedding.Vector.ToArray()));
-                    }
+                    var indexedVectors = await EmbedChunksBoundedAsync(
+                        embeddingGenerator,
+                        chunks,
+                        maxEmbeddingConcurrency);
 
                     await vectorService.SaveBlogPostChunksAsync(
                         blogPost.Id,
@@ -159,6 +162,50 @@ static async Task ProcessBlogsAsync(IEmbeddingGenerator<string, Embedding<float>
     {
         Console.WriteLine($"❌ Error in ProcessBlogsAsync: {ex.Message}");
     }
+}
+
+static int GetMaxEmbeddingConcurrency(IConfiguration configuration)
+{
+    const int defaultValue = 4;
+    var s = configuration["OpenAI:MaxEmbeddingConcurrency"];
+    if (string.IsNullOrWhiteSpace(s) || !int.TryParse(s, out var v))
+    {
+        return defaultValue;
+    }
+
+    return Math.Clamp(v, 1, 32);
+}
+
+static async Task<List<(int chunkIndex, float[] vector)>> EmbedChunksBoundedAsync(
+    IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+    IReadOnlyList<string> chunks,
+    int maxConcurrency)
+{
+    maxConcurrency = Math.Clamp(maxConcurrency, 1, 32);
+    using var semaphore = new SemaphoreSlim(maxConcurrency, maxConcurrency);
+
+    async Task<(int chunkIndex, float[] vector)> EmbedAsync(int index)
+    {
+        await semaphore.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var embedding = await embeddingGenerator.GenerateAsync(chunks[index]).ConfigureAwait(false);
+            return (index, embedding.Vector.ToArray());
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
+    var tasks = new Task<(int chunkIndex, float[] vector)>[chunks.Count];
+    for (var i = 0; i < chunks.Count; i++)
+    {
+        tasks[i] = EmbedAsync(i);
+    }
+
+    var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+    return results.ToList();
 }
 
 static async Task SearchBlogsAsync(IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator, CosmosDbService vectorService)
