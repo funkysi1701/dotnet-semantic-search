@@ -54,6 +54,7 @@ catch (Exception ex)
 ConsoleHelper.ShowHeader();
 
 var maxEmbeddingConcurrency = GetMaxEmbeddingConcurrency(configuration);
+var indexTitleAuxVectors = configuration.GetValue("Search:IndexTitleAuxVectors", true);
 
 // Main menu loop
 while (true)
@@ -69,7 +70,7 @@ while (true)
     switch (choice)
     {
         case "1":
-            await ProcessBlogsAsync(embeddingGenerator, vectorService, maxEmbeddingConcurrency);
+            await ProcessBlogsAsync(embeddingGenerator, vectorService, maxEmbeddingConcurrency, indexTitleAuxVectors);
             break;
 
         case "2":
@@ -92,7 +93,8 @@ while (true)
 static async Task ProcessBlogsAsync(
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
     CosmosDbService vectorService,
-    int maxEmbeddingConcurrency)
+    int maxEmbeddingConcurrency,
+    bool indexTitleAuxVectors)
 {
     try
     {
@@ -144,6 +146,15 @@ static async Task ProcessBlogsAsync(
                         indexedVectors);
                 }
 
+                if (indexTitleAuxVectors)
+                {
+                    await IndexTitleAuxiliaryVectorIfNeededAsync(
+                        embeddingGenerator,
+                        vectorService,
+                        blogPost,
+                        singleChunkSourceText: chunks.Count == 1 ? chunks[0] : null);
+                }
+
                 processedCount++;
 
                 if (processedCount % 10 == 0 || processedCount == blogPosts.Count)
@@ -164,6 +175,35 @@ static async Task ProcessBlogsAsync(
     {
         Console.WriteLine($"❌ Error in ProcessBlogsAsync: {ex.Message}");
     }
+}
+
+/// <summary>Stores an extra vector row embedding title (+ categories) only, for title-centric similarity.</summary>
+static async Task IndexTitleAuxiliaryVectorIfNeededAsync(
+    IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+    CosmosDbService vectorService,
+    BlogPost blogPost,
+    string? singleChunkSourceText)
+{
+    var titleOnly = blogPost.BuildTitleOnlyEmbeddingText();
+    if (titleOnly.Length < 2)
+    {
+        return;
+    }
+
+    if (singleChunkSourceText is not null
+        && string.Equals(singleChunkSourceText.Trim(), titleOnly.Trim(), StringComparison.Ordinal))
+    {
+        return;
+    }
+
+    var emb = await embeddingGenerator.GenerateAsync(titleOnly);
+    await vectorService.SaveAuxiliaryTitleVectorAsync(
+        blogPost.Id,
+        blogPost.Title,
+        blogPost.Url,
+        blogPost.ImageUrl,
+        blogPost.PublishedAt,
+        emb.Vector.ToArray());
 }
 
 static int GetMaxEmbeddingConcurrency(IConfiguration configuration)
@@ -231,7 +271,7 @@ static async Task SearchBlogsAsync(IEmbeddingGenerator<string, Embedding<float>>
 
         var results = await vectorService.SearchSimilarBlogPostsAsync(
             queryEmbedding.Vector.ToArray(),
-            maxResults: 5,
+            maxResults: 30,
             lexicalQuery: query.Trim());
 
         if (results.Any())

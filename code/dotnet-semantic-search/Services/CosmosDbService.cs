@@ -19,6 +19,9 @@ public sealed class CosmosDbService : IDisposable
 {
     public const int VectorDimensions = 768;
 
+    /// <summary>Stored on auxiliary title-only rows so they can be distinguished from body chunks.</summary>
+    public const int TitleAuxiliaryChunkIndex = -1;
+
     private readonly CosmosClient _client;
     private readonly string _databaseName;
     private readonly string _containerName;
@@ -247,6 +250,40 @@ public sealed class CosmosDbService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Extra vector row embedding <paramref name="titleVector"/> built from title (+ categories) only.
+    /// Same <paramref name="parentPostId"/> as the post; search merge keeps the best (minimum) distance across all chunks including this one.
+    /// </summary>
+    public async Task SaveAuxiliaryTitleVectorAsync(
+        string parentPostId,
+        string title,
+        string url,
+        string? imageUrl,
+        DateTimeOffset? publishedAt,
+        float[] titleVector)
+    {
+        ValidateEmbedding(titleVector);
+        var id = SanitizeCosmosId(Guid.NewGuid().ToString());
+        var payload = BuildItemPayload(
+            id,
+            parentPostId: SanitizeCosmosId(parentPostId),
+            TitleAuxiliaryChunkIndex,
+            SanitizeFreeText(title),
+            SanitizeFreeText(url),
+            imageUrl,
+            publishedAt,
+            titleVector);
+
+        try
+        {
+            await Container.UpsertItemAsync(payload, new PartitionKey(id));
+        }
+        catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.BadRequest)
+        {
+            ThrowCosmosWriteException(ex, titleVector.Length);
+        }
+    }
+
     /// <param name="lexicalQuery">When non-empty, merges vector order with title/URL token match ranks via RRF (reciprocal rank fusion).</param>
     public async Task<List<BlogPost>> SearchSimilarBlogPostsAsync(
         float[] queryVector,
@@ -260,7 +297,12 @@ public sealed class CosmosDbService : IDisposable
 
         // Wider candidate pool before per-post dedupe: small TOP drops recall when many chunks
         // score similarly (e.g. many posts about the same topic). Trade-off: more RU / latency.
-        var top = Math.Max(maxResults * 25, 200);
+        // With lexical hybrid we widen further; title hits are also merged in below so strong
+        // title matches are not dropped just because every body chunk missed the vector TOP window.
+        var hasLexical = !string.IsNullOrWhiteSpace(lexicalQuery);
+        var top = hasLexical
+            ? Math.Max(maxResults * 50, 500)
+            : Math.Max(maxResults * 25, 200);
         var sql =
             $"SELECT TOP {top} c.id, c.title, c.url, c.image_url, c.published_at, c.parent_post_id, VectorDistance(c.vector, @embedding) AS dist " +
             "FROM c ORDER BY VectorDistance(c.vector, @embedding)";
@@ -332,6 +374,11 @@ public sealed class CosmosDbService : IDisposable
             return [];
         }
 
+        if (hasLexical)
+        {
+            await MergeLexicalTitleHitsIntoCandidatesAsync(candidates, lexicalQuery!.Trim());
+        }
+
         if (string.IsNullOrWhiteSpace(lexicalQuery))
         {
             return candidates.Take(maxResults).Select(c => c.post).ToList();
@@ -347,6 +394,8 @@ public sealed class CosmosDbService : IDisposable
         int maxResults)
     {
         const float rrfK = 60f;
+        // Lexical list contributes more than vector so obvious title matches are not buried.
+        const float lexicalRrfWeight = 2.25f;
         if (candidates.Count == 0)
         {
             return [];
@@ -379,7 +428,7 @@ public sealed class CosmosDbService : IDisposable
                 var key = PostEquivalenceKey(c.post);
                 var vr = vectorRankByKey[key];
                 var lr = lexicalRankByKey[key];
-                var rrf = (1f / (rrfK + vr)) + (1f / (rrfK + lr));
+                var rrf = (1f / (rrfK + vr)) + lexicalRrfWeight * (1f / (rrfK + lr));
                 return (c.post, rrf);
             })
             .OrderByDescending(x => x.rrf)
@@ -429,10 +478,107 @@ public sealed class CosmosDbService : IDisposable
 
         if (phraseLower.Length >= 3 && tl.Contains(phraseLower, StringComparison.Ordinal))
         {
-            score += 12;
+            score += 28;
         }
 
         return score;
+    }
+
+    /// <summary>
+    /// Adds posts whose titles match the query via CONTAINS so they participate in RRF even when
+    /// no chunk landed in the vector TOP window (common for exact/near-exact title queries).
+    /// </summary>
+    private async Task MergeLexicalTitleHitsIntoCandidatesAsync(
+        List<(BlogPost post, double dist)> candidates,
+        string lexicalQueryTrim)
+    {
+        if (!TryBuildTitleLexicalWhereClause(lexicalQueryTrim, out var whereSql, out var parameters))
+        {
+            return;
+        }
+
+        var sql =
+            "SELECT c.id, c.title, c.url, c.image_url, c.published_at, c.parent_post_id FROM c WHERE " +
+            whereSql +
+            " AND (NOT IS_DEFINED(c.chunk_index) OR c.chunk_index = 0 OR c.chunk_index = " +
+            TitleAuxiliaryChunkIndex +
+            ")";
+
+        var query = new QueryDefinition(sql);
+        foreach (var (name, value) in parameters)
+        {
+            query.WithParameter(name, value);
+        }
+
+        var seenKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var c in candidates)
+        {
+            seenKeys.Add(PostEquivalenceKey(c.post));
+        }
+
+        var maxDist = candidates.Count > 0 ? candidates.Max(x => x.dist) : 0.0;
+        var injectDist = Math.Max(maxDist + 0.02, 1.2);
+
+        using var feed = Container.GetItemQueryIterator<TitleLexicalRow>(query);
+        while (feed.HasMoreResults)
+        {
+            var page = await feed.ReadNextAsync();
+            foreach (var row in page)
+            {
+                var groupKey = !string.IsNullOrEmpty(row.ParentPostId) ? row.ParentPostId : row.Id;
+                var blog = new BlogPost
+                {
+                    Id = groupKey,
+                    Title = row.Title ?? string.Empty,
+                    Url = row.Url ?? string.Empty,
+                    ImageUrl = string.IsNullOrWhiteSpace(row.ImageUrl) ? null : row.ImageUrl.Trim(),
+                    PublishedAt = TryParsePublishedAt(row.PublishedAt)
+                };
+
+                var key = PostEquivalenceKey(blog);
+                if (!seenKeys.Add(key))
+                {
+                    continue;
+                }
+
+                candidates.Add((blog, injectDist));
+            }
+        }
+    }
+
+    /// <returns>false when the query is too vague to run a cheap title scan (no tokens / short phrase).</returns>
+    private static bool TryBuildTitleLexicalWhereClause(
+        string lexicalQueryTrim,
+        out string whereSql,
+        out List<(string Name, object Value)> parameters)
+    {
+        parameters = [];
+        var phrase = Regex.Replace(lexicalQueryTrim.Trim(), @"\s+", " ");
+        var tokens = TokenizeLexical(lexicalQueryTrim);
+
+        if (phrase.Length >= 4)
+        {
+            whereSql = "CONTAINS(c.title, @lexPhrase, true)";
+            parameters.Add(("@lexPhrase", phrase));
+            return true;
+        }
+
+        if (tokens.Count == 0)
+        {
+            whereSql = string.Empty;
+            return false;
+        }
+
+        var parts = new List<string>(tokens.Count);
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var p = "@lexTok" + i;
+            parts.Add($"CONTAINS(c.title, {p}, true)");
+            parameters.Add((p, tokens[i]));
+        }
+
+        whereSql = string.Join(" AND ", parts);
+        return true;
     }
 
     private static string PostEquivalenceKey(BlogPost p)
@@ -601,6 +747,28 @@ public sealed class CosmosDbService : IDisposable
             "(3) container vector policy does not match the account or was created with different dimensions — use a new container name and re-run. " +
             $"Cosmos message: {ex.Message}",
             ex);
+    }
+
+    /// <summary>Row shape for title CONTAINS scans (no vector / distance).</summary>
+    private sealed class TitleLexicalRow
+    {
+        [JsonProperty("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonProperty("title")]
+        public string? Title { get; set; }
+
+        [JsonProperty("url")]
+        public string? Url { get; set; }
+
+        [JsonProperty("image_url")]
+        public string? ImageUrl { get; set; }
+
+        [JsonProperty("parent_post_id")]
+        public string? ParentPostId { get; set; }
+
+        [JsonProperty("published_at")]
+        public string? PublishedAt { get; set; }
     }
 
     /// <summary>Cosmos query row shape. The SDK deserializes with Newtonsoft.Json — use <see cref="JsonPropertyAttribute"/>, not STJ <c>JsonPropertyName</c>.</summary>

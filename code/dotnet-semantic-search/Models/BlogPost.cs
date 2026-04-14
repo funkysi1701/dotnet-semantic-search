@@ -42,4 +42,11 @@ public class BlogPost
         var categoriesText = Categories.Any() ? $" Categories: {string.Join(", ", Categories)}" : "";
         CombinedText = $"{Title}. {Content}{categoriesText}";
     }
+
+    /// <summary>Title + categories only (no body), for a dedicated auxiliary embedding to help title-centric retrieval.</summary>
+    public string BuildTitleOnlyEmbeddingText()
+    {
+        var categoriesText = Categories.Any() ? $" Categories: {string.Join(", ", Categories)}" : "";
+        return $"{Title}.{categoriesText}".Trim();
+    }
 }
