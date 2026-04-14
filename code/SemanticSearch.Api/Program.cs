@@ -26,12 +26,7 @@ var host = new HostBuilder()
         services.AddSingleton<CosmosDbService>();
         services.AddHostedService<CosmosInitializerHostedService>();
         services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(_ =>
-        {
-            var cfg = context.Configuration;
-            var baseUrl = cfg["Ollama:BaseUrl"] ?? "http://localhost:11434/";
-            var model = cfg["Ollama:Model"] ?? "nomic-embed-text";
-            return new OllamaEmbeddingGenerator(new Uri(baseUrl), model);
-        });
+            OpenAIEmbeddingGeneratorFactory.Create(context.Configuration));
         services.AddSingleton<SearchFunction>();
     })
     .Build();

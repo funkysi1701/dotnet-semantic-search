@@ -2,11 +2,11 @@ namespace MicrosoftExtensionsAiSample.Utils;
 
 /// <summary>
 /// Splits long text into overlapping segments so each fits under embedding model limits.
-/// Uses a conservative character budget (not a model tokenizer) to avoid exceeding Ollama context.
+/// Uses a conservative character budget (not a model tokenizer) to avoid exceeding embedding model context.
 /// </summary>
 internal static class TextChunker
 {
-    /// <summary>~2–3k tokens typical for English prose; stays under nomic-embed-text 8192 tokens.</summary>
+    /// <summary>~2–3k tokens typical for English prose; stays under common embedding model context limits.</summary>
     public const int DefaultMaxChunkChars = 1_000;
 
     public const int DefaultOverlapChars = 400;

@@ -2,7 +2,6 @@
 
 internal static class Statics
 {
-    public const string OllamaKey = "Ollama";
     public const string OpenAiKey = "OpenAI";
     public const string AzureOpenAiKey = "Azure OpenAI";
 

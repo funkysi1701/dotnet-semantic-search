@@ -1,6 +1,6 @@
 # .NET Semantic Search Demo
 
-A .NET application demonstrating semantic search capabilities using AI embeddings with **Azure Cosmos DB for NoSQL** (vector search) and **Ollama** for local embedding inference.
+A .NET application demonstrating semantic search capabilities using AI embeddings with **Azure Cosmos DB for NoSQL** (vector search) and the **OpenAI** API (`text-embedding-3-small` at 768 dimensions by default).
 
 ## Features
 
@@ -12,7 +12,7 @@ A .NET application demonstrating semantic search capabilities using AI embedding
 ## Architecture
 
 - **Vector Database**: Azure Cosmos DB for NoSQL (`VectorDistance` queries, 768-d cosine)
-- **AI Embeddings**: Ollama with `nomic-embed-text` model (local installation)
+- **AI Embeddings**: OpenAI `text-embedding-3-small` shortened to 768 dimensions (matches Cosmos vector index)
 - **Framework**: .NET 9
 - **AI Integration**: Microsoft.Extensions.AI
 
@@ -21,11 +21,6 @@ A .NET application demonstrating semantic search capabilities using AI embedding
 ### Required
 - An [Azure Cosmos DB for NoSQL](https://learn.microsoft.com/azure/cosmos-db/how-to-create-account) account with **vector search** enabled ([EnableNoSQLVectorSearch](https://learn.microsoft.com/azure/cosmos-db/vector-search))
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
-
-### Platform-Specific Tools
-- **macOS**: [Homebrew](https://brew.sh/) (recommended for Ollama installation)
-- **Windows**: [Chocolatey](https://chocolatey.org/) (optional, for package management)
-- **Linux**: `curl` for Ollama installation script
 
 ### Verify Prerequisites
 ```bash
@@ -91,70 +86,36 @@ Alternatively use `COSMOS_ENDPOINT` and `COSMOS_KEY` instead of `COSMOS_CONNECTI
 
 The app creates the database and container on first run (768-dimensional cosine vectors on `/vector`, partition key `/id`).
 
-### 3. Set Up Ollama (AI Model)
+### 3. Set Up OpenAI (embeddings API)
 
-Ollama runs locally for better performance. Choose the installation method for your platform:
+1. Create an [OpenAI API key](https://platform.openai.com/api-keys) (billing enabled as required by your account).
+2. Store it in **user secrets** (recommended locally) or environment variable **`OPENAI_API_KEY`**.
 
-#### macOS Installation
-
-```bash
-# Install Ollama via Homebrew
-brew install ollama
-
-# Start Ollama as a service
-brew services start ollama
-
-# Pull the embedding model
-ollama pull nomic-embed-text
-
-# Verify the model is available
-ollama list
-```
-
-#### Windows Installation
-
-**Option 1: Direct Download (Recommended)**
-1. Download the Ollama installer from [https://ollama.com/download](https://ollama.com/download)
-2. Run the installer and follow the setup wizard
-3. Ollama will start automatically as a Windows service
-
-**Option 2: Using Chocolatey**
-```powershell
-# Install Chocolatey first if you haven't already
-# Then install Ollama
-choco install ollama
-
-# Ollama starts automatically as a service
-```
-
-**After Installation (Both Options)**
-```powershell
-# Pull the embedding model
-ollama pull nomic-embed-text
-
-# Verify the model is available
-ollama list
-```
-
-#### Linux Installation
+From **`code/dotnet-semantic-search`**:
 
 ```bash
-# Install Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-
-# Start Ollama service
-sudo systemctl start ollama
-sudo systemctl enable ollama
-
-# Pull the embedding model
-ollama pull nomic-embed-text
-
-# Verify the model is available
-ollama list
+cd dotnet-semantic-search
+dotnet user-secrets set "OpenAI:ApiKey" "sk-..."
 ```
 
-Ollama will be available at:
-- **API**: http://localhost:11434
+From the repo root:
+
+```bash
+dotnet user-secrets set "OpenAI:ApiKey" "sk-..." --project code/dotnet-semantic-search/dotnet-semantic-search.csproj
+```
+
+For **`SemanticSearch.Api`** only (Azure Functions worker), use the same key name on that project’s user secrets:
+
+```bash
+dotnet user-secrets set "OpenAI:ApiKey" "sk-..." --project code/SemanticSearch.Api/SemanticSearch.Api.csproj
+```
+
+**Azure Static Web Apps / Functions**: add application setting **`OpenAI__ApiKey`** (or **`OPENAI_API_KEY`**) in the portal; never commit keys to git.
+
+Optional overrides (defaults match `appsettings.json`):
+
+- **`OpenAI:EmbeddingModel`** — default `text-embedding-3-small`
+- **`OpenAI:EmbeddingDimensions`** — default `768` (must match your Cosmos vector index; change only if you recreate the container with a different size)
 
 ### 4. Run the Application
 
@@ -191,9 +152,9 @@ The application provides a simple menu interface:
 The application is configured to process blog posts from Trailhead Technology's RSS feed. You can modify the RSS source in the code if needed.
 
 ### Model Configuration
-- **Embedding Model**: `nomic-embed-text` (274 MB)
-- **Vector Dimensions**: 768
-- **Embedding Provider**: Ollama
+- **Embedding Model**: `text-embedding-3-small` (768 dimensions via API shortening)
+- **Vector Dimensions**: 768 (Cosmos container policy)
+- **Embedding Provider**: OpenAI (`Microsoft.Extensions.AI.OpenAI`)
 
 ## Troubleshooting
 
@@ -204,52 +165,11 @@ The application is configured to process blog posts from Trailhead Technology's 
 - If user secrets are set but the app still cannot connect, check for **empty** `Cosmos__ConnectionString`, `COSMOS_CONNECTION_STRING`, or `COSMOS_KEY` in **user or machine** environment variables (they used to override secrets when env was applied last; the app now applies secrets after env, but clearing stale empty vars still avoids confusion).
 - Vector indexing applies only to **new** containers; if you change vector settings, use a new container name or database and re-ingest.
 
-### Ollama Issues
+### OpenAI / embedding issues
 
-#### macOS
-```bash
-# Check if Ollama service is running
-brew services list | grep ollama
-
-# Restart Ollama service
-brew services restart ollama
-
-# Check available models
-ollama list
-
-# Re-pull the model if needed
-ollama pull nomic-embed-text
-```
-
-#### Windows
-```powershell
-# Check if Ollama service is running
-Get-Service -Name "Ollama*"
-
-# Restart Ollama service (run as Administrator)
-Restart-Service -Name "Ollama*"
-
-# Check available models
-ollama list
-
-# Re-pull the model if needed
-ollama pull nomic-embed-text
-```
-
-#### Linux
-```bash
-# Check if Ollama service is running
-sudo systemctl status ollama
-
-# Restart Ollama service
-sudo systemctl restart ollama
-
-# Check available models
-ollama list
-
-# Re-pull the model if needed
-ollama pull nomic-embed-text
-```
+- **`401` / invalid API key**: confirm `OpenAI:ApiKey` or `OPENAI_API_KEY` is set for the same process as `dotnet run`, or `OpenAI__ApiKey` in Azure Functions configuration.
+- **Quota / billing**: embedding calls require an account with available quota.
+- **Wrong vector size**: if you change `OpenAI:EmbeddingDimensions`, recreate the Cosmos container (or a new container name) and re-run blog processing so stored vectors match the index.
 
 ### Application Issues
 
@@ -267,7 +187,7 @@ dotnet clean && dotnet build
 ## Performance Notes
 
 - **Cosmos DB**: Request charges depend on indexing, RU/s or serverless configuration, and result size
-- **Ollama Local**: Running Ollama locally provides better latency for embedding generation
+- **OpenAI**: Latency and cost depend on model and region; `text-embedding-3-small` is sized for production use
 - **First Run**: Initial blog post processing may take several minutes depending on the number of posts
 - **Embeddings**: Stored in Cosmos DB and queried with `VectorDistance`
 
@@ -276,7 +196,7 @@ dotnet clean && dotnet build
 ### Dependencies
 - `Microsoft.Azure.Cosmos` - Cosmos DB for NoSQL client (vector policy + `VectorDistance` queries)
 - `Microsoft.Extensions.AI` - AI abstraction layer
-- `Microsoft.Extensions.AI.Ollama` - Ollama integration
+- `Microsoft.Extensions.AI.OpenAI` - OpenAI embedding integration
 - `Spectre.Console` - Enhanced console output
 - Custom services for Cosmos DB and blog retrieval
 
@@ -286,7 +206,7 @@ dotnet clean && dotnet build
 - **Metadata**: `title`, `url`, `parent_post_id`, `chunk_index`
 
 ### Search Algorithm
-1. Convert search query to embedding using Ollama
+1. Convert search query to embedding using OpenAI
 2. Run a Cosmos SQL query ordering by `VectorDistance(c.vector, @embedding)`
 3. Merge hits by `parent_post_id` and return top unique posts
 4. Display results with metadata

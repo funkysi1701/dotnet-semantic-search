@@ -39,17 +39,15 @@ catch (Exception ex)
     return;
 }
 
-// Initialize Ollama embedding generator with hardcoded model
 try
 {
-    embeddingGenerator = new OllamaEmbeddingGenerator(
-        new Uri("http://localhost:11434/"), "nomic-embed-text");
-    Console.WriteLine("✅ Connected to Ollama with nomic-embed-text model");
+    embeddingGenerator = OpenAIEmbeddingGeneratorFactory.Create(configuration);
+    Console.WriteLine("✅ OpenAI embedding client ready (text-embedding-3-small @ 768 dims by default)");
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"❌ Failed to connect to Ollama: {ex.Message}");
-    Console.WriteLine("Make sure Ollama is running on port 11434 with nomic-embed-text model");
+    Console.WriteLine($"❌ Failed to configure OpenAI embeddings: {ex.Message}");
+    Console.WriteLine("Set OPENAI_API_KEY or OpenAI:ApiKey (user secrets: dotnet user-secrets set \"OpenAI:ApiKey\" \"...\" --project dotnet-semantic-search.csproj).");
     return;
 }
 

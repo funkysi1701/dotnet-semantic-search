@@ -9,7 +9,7 @@ using MicrosoftExtensionsAiSample.Models;
 namespace MicrosoftExtensionsAiSample.Services;
 
 /// <summary>
-/// Azure Cosmos DB for NoSQL with vector indexing (nomic-embed-text: 768 dims, cosine).
+/// Azure Cosmos DB for NoSQL with vector indexing (768-dimensional cosine vectors; embeddings from OpenAI text-embedding-3-small with shortened dimensions by default).
 /// Credentials are read from <see cref="IConfiguration"/> (JSON, then environment, then user secrets so local secrets win over empty env placeholders).
 /// Prefer <c>dotnet user-secrets set "Cosmos:ConnectionString" "..."</c> for local development.
 /// </summary>
@@ -311,7 +311,7 @@ public sealed class CosmosDbService : IDisposable
         if (vector.Length != VectorDimensions)
         {
             throw new InvalidOperationException(
-                $"Embedding has {vector.Length} dimensions; this container expects {VectorDimensions} (nomic-embed-text). " +
+                $"Embedding has {vector.Length} dimensions; this container expects {VectorDimensions}. " +
                 "Use a matching model or create a new Cosmos container with the correct vectorEmbeddingPolicy dimensions.");
         }
 
