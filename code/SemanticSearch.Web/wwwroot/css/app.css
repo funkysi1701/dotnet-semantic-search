@@ -395,6 +395,27 @@ body {
     font-size: 0.82em;
 }
 
+.site-built {
+    margin-top: 3rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+}
+
+.site-built__link {
+    color: var(--accent-hover);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.site-built__link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
     color: var(--bs-secondary-color);
     text-align: end;
