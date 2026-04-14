@@ -30,8 +30,8 @@ jobs:
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
           # Blazor WebAssembly: Oryx must see a single .NET project folder (not the monorepo "code" root).
           app_location: "code/SemanticSearch.Web"
-          # SemanticSearch.Api is ASP.NET Core, not Azure Functions — leave empty or deploy the API separately.
-          api_location: ""
+          # Azure Functions isolated worker (.NET) — POST /api/search
+          api_location: "code/SemanticSearch.Api"
           output_location: "wwwroot"
           ###### End of Repository/Build Configurations ######
 

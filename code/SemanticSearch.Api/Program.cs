@@ -1,56 +1,45 @@
+using System.Reflection;
+using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.AI;
-using MicrosoftExtensionsAiSample.Models;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using MicrosoftExtensionsAiSample.Services;
+using SemanticSearch.Api;
 
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddSingleton<CosmosDbService>();
-builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(_ =>
-{
-    var baseUrl = builder.Configuration["Ollama:BaseUrl"] ?? "http://localhost:11434/";
-    var model = builder.Configuration["Ollama:Model"] ?? "nomic-embed-text";
-    return new OllamaEmbeddingGenerator(new Uri(baseUrl), model);
-});
-
-builder.Services.AddCors(options =>
-{
-    options.AddDefaultPolicy(policy =>
+var host = new HostBuilder()
+    .ConfigureAppConfiguration((_, config) =>
     {
-        policy
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .SetIsOriginAllowed(_ => true);
-    });
-});
-
-var app = builder.Build();
-
-app.UseCors();
-
-var cosmos = app.Services.GetRequiredService<CosmosDbService>();
-await cosmos.InitializeAsync();
-
-app.MapPost("/api/search", async (
-    SearchRequest body,
-    IEmbeddingGenerator<string, Embedding<float>> embeddings,
-    CosmosDbService db,
-    CancellationToken cancellationToken) =>
-{
-    if (string.IsNullOrWhiteSpace(body.Query))
+        config.SetBasePath(AppContext.BaseDirectory);
+        config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
+        var env = Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? "Production";
+        config.AddJsonFile($"appsettings.{env}.json", optional: true, reloadOnChange: false);
+        config.AddEnvironmentVariables();
+        config.AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true);
+    })
+    .ConfigureFunctionsWorkerDefaults()
+    .ConfigureServices((context, services) =>
     {
-        return Results.BadRequest("Query is required.");
-    }
+        services.AddSingleton<CosmosDbService>();
+        services.AddHostedService<CosmosInitializerHostedService>();
+        services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(_ =>
+        {
+            var cfg = context.Configuration;
+            var baseUrl = cfg["Ollama:BaseUrl"] ?? "http://localhost:11434/";
+            var model = cfg["Ollama:Model"] ?? "nomic-embed-text";
+            return new OllamaEmbeddingGenerator(new Uri(baseUrl), model);
+        });
+        services.AddSingleton<SearchFunction>();
+    })
+    .Build();
 
-    var max = body.MaxResults is > 0 and <= 50 ? body.MaxResults : 10;
-    var queryEmbedding = await embeddings.GenerateAsync(body.Query, cancellationToken: cancellationToken);
-    var posts = await db.SearchSimilarBlogPostsAsync(queryEmbedding.Vector.ToArray(), maxResults: max);
-    var response = posts.Select(p => new SearchResultItem(p.Id, p.Title, p.Url)).ToList();
-    return Results.Ok(response);
-})
-.WithName("SearchBlogPosts");
+await host.RunAsync();
 
-app.Run();
+internal sealed class CosmosInitializerHostedService(CosmosDbService cosmos) : IHostedService
+{
+    public Task StartAsync(CancellationToken cancellationToken) => cosmos.InitializeAsync();
 
-internal sealed record SearchRequest(string Query, int MaxResults = 10);
-
-internal sealed record SearchResultItem(string Id, string Title, string Url);
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
