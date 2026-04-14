@@ -1,8 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Net;
 using System.Text;
-using System.Text.Json.Serialization;
 using Microsoft.Azure.Cosmos;
+using Newtonsoft.Json;
 using Microsoft.Extensions.Configuration;
 using MicrosoftExtensionsAiSample.Models;
 
@@ -455,24 +455,25 @@ public sealed class CosmosDbService : IDisposable
             ex);
     }
 
+    /// <summary>Cosmos query row shape. The SDK deserializes with Newtonsoft.Json — use <see cref="JsonPropertyAttribute"/>, not STJ <c>JsonPropertyName</c>.</summary>
     private sealed class VectorSearchRow
     {
-        [JsonPropertyName("id")]
+        [JsonProperty("id")]
         public string Id { get; set; } = string.Empty;
 
-        [JsonPropertyName("title")]
+        [JsonProperty("title")]
         public string? Title { get; set; }
 
-        [JsonPropertyName("url")]
+        [JsonProperty("url")]
         public string? Url { get; set; }
 
-        [JsonPropertyName("image_url")]
+        [JsonProperty("image_url")]
         public string? ImageUrl { get; set; }
 
-        [JsonPropertyName("parent_post_id")]
+        [JsonProperty("parent_post_id")]
         public string? ParentPostId { get; set; }
 
-        [JsonPropertyName("dist")]
+        [JsonProperty("dist")]
         public double Dist { get; set; }
     }
 }
