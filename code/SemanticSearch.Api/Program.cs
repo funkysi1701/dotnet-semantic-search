@@ -11,11 +11,12 @@ var host = new HostBuilder()
     .ConfigureAppConfiguration((_, config) =>
     {
         config.SetBasePath(AppContext.BaseDirectory);
-        config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: false);
+        // Use appsettings.Api*.json so publish does not collide with referenced dotnet-semantic-search/appsettings.json (NETSDK1152).
+        config.AddJsonFile("appsettings.Api.json", optional: false, reloadOnChange: false);
         var env = Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT")
             ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
             ?? "Production";
-        config.AddJsonFile($"appsettings.{env}.json", optional: true, reloadOnChange: false);
+        config.AddJsonFile($"appsettings.Api.{env}.json", optional: true, reloadOnChange: false);
         config.AddEnvironmentVariables();
         config.AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true);
     })

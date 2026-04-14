@@ -487,3 +487,4 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 code/SemanticSearch.Web/publish-out
+code/pub-api-test
