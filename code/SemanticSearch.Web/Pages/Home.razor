@@ -2,19 +2,22 @@
 @using System.Net.Http.Json
 @inject HttpClient Http
 
-<PageTitle>Semantic blog search</PageTitle>
+<PageTitle>Search funkysi1701.com</PageTitle>
 
 <main class="page">
-    <header class="page__header">
-        <h1>Semantic blog search</h1>
-        <p class="page__lede">
-            Search the <strong>semantic-search-blog</strong> Cosmos DB database (vector index built with the console indexer and OpenAI embeddings).
+    <header class="hero">
+        <p class="hero__eyebrow">Blog search</p>
+        <h1 class="hero__title">
+            Find anything on <a class="hero__site" href="https://www.funkysi1701.com/" target="_blank" rel="noopener noreferrer">funkysi1701.com</a>
+        </h1>
+        <p class="hero__lede">
+            Ask in your own words — this search matches <em>meaning</em>, not just exact keywords, so you can discover posts even when you do not remember the title.
         </p>
     </header>
 
-    <section class="search" aria-label="Search">
+    <section class="search" aria-label="Search funkysi1701.com">
         <form class="search__form" @onsubmit="SearchAsync" @onsubmit:preventDefault="true">
-            <label class="search__label" for="q">Query</label>
+            <label class="search__label" for="q">What are you looking for?</label>
             <div class="search__row">
                 <input id="q"
                        class="search__input"
@@ -22,7 +25,7 @@
                        @bind:event="oninput"
                        autocomplete="off"
                        maxlength="500"
-                       placeholder="What do you want to find?"
+                       placeholder="e.g. Azure tips, C# performance, conference talks…"
                        disabled="@isLoading" />
                 <button class="search__submit" type="submit" disabled="@isLoading">
                     @(isLoading ? "Searching…" : "Search")
@@ -38,21 +41,43 @@
 
     @if (results.Count > 0)
     {
-        <section class="results" aria-label="Results">
-            <h2 class="results__title">@results.Count result@(results.Count == 1 ? "" : "s")</h2>
-            <ol class="results__list">
+        <section class="results" aria-label="Search results">
+            <h2 class="results__title">@results.Count post@(results.Count == 1 ? "" : "s") that fit what you asked</h2>
+            <ul class="results__cards">
                 @foreach (var item in results)
                 {
-                    <li class="results__item">
-                        <a class="results__link" href="@item.Url" target="_blank" rel="noopener noreferrer">@item.Title</a>
+                    <li class="results__card">
+                        <a class="results__card-link" href="@item.Url" target="_blank" rel="noopener noreferrer">
+                            <span class="results__card-title">@item.Title</span>
+                            <span class="results__card-meta">Read on funkysi1701.com <span class="results__card-arrow" aria-hidden="true">→</span></span>
+                        </a>
                     </li>
                 }
-            </ol>
+            </ul>
         </section>
     }
     else if (hasSearched && !isLoading && string.IsNullOrWhiteSpace(errorMessage))
     {
-        <p class="message">No posts matched that query.</p>
+        <p class="message message--empty">No posts matched that query. Try different words or a broader topic.</p>
+    }
+
+    @if (hasSearched)
+    {
+        <footer class="tech-foot" aria-label="Technical details">
+            <details class="tech-foot__details">
+                <summary class="tech-foot__summary">How this search works (technical)</summary>
+                <div class="tech-foot__body">
+                    <p>
+                        Results come from a vector index in Azure Cosmos DB for NoSQL (database <code>semantic-search-blog</code>),
+                        populated by a small .NET indexer that reads the site’s RSS feed and stores OpenAI embedding vectors.
+                        Your query is embedded the same way; closest vectors rank first — that is semantic search, not plain text matching.
+                    </p>
+                    <p class="tech-foot__hint">
+                        If search fails, run <strong>SemanticSearch.Api</strong> locally or configure <code>ApiBaseUrl</code> (see the repo README).
+                    </p>
+                </div>
+            </details>
+        </footer>
     }
 </main>
 
