@@ -15,6 +15,10 @@ public class BlogPost
     
     [JsonProperty("url")]
     public string Url { get; set; } = string.Empty;
+
+    /// <summary>Optional featured/first image URL from the RSS HTML (e.g. first &lt;img src&gt;).</summary>
+    [JsonProperty("imageUrl")]
+    public string? ImageUrl { get; set; }
     
     [JsonProperty("categories")]
     public List<string> Categories { get; set; } = new();

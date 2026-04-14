@@ -47,9 +47,26 @@
                 @foreach (var item in results)
                 {
                     <li class="results__card">
-                        <a class="results__card-link" href="@item.Url" target="_blank" rel="noopener noreferrer">
-                            <span class="results__card-title">@item.Title</span>
-                            <span class="results__card-meta">Read on funkysi1701.com <span class="results__card-arrow" aria-hidden="true">→</span></span>
+                        <a class="results__card-link @(string.IsNullOrWhiteSpace(item.ImageUrl) ? "results__card-link--no-image" : null)"
+                           href="@item.Url"
+                           target="_blank"
+                           rel="noopener noreferrer">
+                            @if (!string.IsNullOrWhiteSpace(item.ImageUrl))
+                            {
+                                <span class="results__card-media">
+                                    <img src="@item.ImageUrl"
+                                         alt=""
+                                         loading="lazy"
+                                         decoding="async"
+                                         referrerpolicy="no-referrer-when-downgrade"
+                                         width="160"
+                                         height="105" />
+                                </span>
+                            }
+                            <span class="results__card-text">
+                                <span class="results__card-title">@item.Title</span>
+                                <span class="results__card-meta">Read on funkysi1701.com <span class="results__card-arrow" aria-hidden="true">→</span></span>
+                            </span>
                         </a>
                     </li>
                 }
@@ -133,5 +150,5 @@
 
     private sealed record SearchRequest(string Query, int MaxResults);
 
-    private sealed record SearchResultItem(string Id, string Title, string Url);
+    private sealed record SearchResultItem(string Id, string Title, string Url, string? ImageUrl = null);
 }

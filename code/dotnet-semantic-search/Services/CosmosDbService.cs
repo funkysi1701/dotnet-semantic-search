@@ -191,6 +191,7 @@ public sealed class CosmosDbService : IDisposable
             chunkIndex: 0,
             SanitizeFreeText(blogPost.Title),
             SanitizeFreeText(blogPost.Url),
+            blogPost.ImageUrl,
             blogPost.Vector);
 
         try
@@ -209,6 +210,7 @@ public sealed class CosmosDbService : IDisposable
         string parentPostId,
         string title,
         string url,
+        string? imageUrl,
         IReadOnlyList<(int chunkIndex, float[] vector)> chunks)
     {
         if (chunks.Count == 0)
@@ -226,6 +228,7 @@ public sealed class CosmosDbService : IDisposable
                 chunkIndex,
                 SanitizeFreeText(title),
                 SanitizeFreeText(url),
+                imageUrl,
                 vector);
 
             try
@@ -248,7 +251,7 @@ public sealed class CosmosDbService : IDisposable
 
         var top = Math.Max(maxResults * 6, 24);
         var sql =
-            $"SELECT TOP {top} c.id, c.title, c.url, c.parent_post_id, VectorDistance(c.vector, @embedding) AS dist " +
+            $"SELECT TOP {top} c.id, c.title, c.url, c.image_url, c.parent_post_id, VectorDistance(c.vector, @embedding) AS dist " +
             "FROM c ORDER BY VectorDistance(c.vector, @embedding)";
 
         var query = new QueryDefinition(sql).WithParameter("@embedding", queryVector);
@@ -262,16 +265,26 @@ public sealed class CosmosDbService : IDisposable
             foreach (var row in page)
             {
                 var groupKey = !string.IsNullOrEmpty(row.ParentPostId) ? row.ParentPostId : row.Id;
-                var blog = new BlogPost
-                {
-                    Id = !string.IsNullOrEmpty(row.ParentPostId) ? row.ParentPostId : row.Id,
-                    Title = row.Title ?? string.Empty,
-                    Url = row.Url ?? string.Empty
-                };
-
                 if (!bestByParent.TryGetValue(groupKey, out var existing) || row.Dist < existing.dist)
                 {
+                    string? imageUrl = string.IsNullOrWhiteSpace(row.ImageUrl) ? null : row.ImageUrl;
+                    if (imageUrl is null && bestByParent.TryGetValue(groupKey, out var prev))
+                    {
+                        imageUrl = prev.post.ImageUrl;
+                    }
+
+                    var blog = new BlogPost
+                    {
+                        Id = !string.IsNullOrEmpty(row.ParentPostId) ? row.ParentPostId : row.Id,
+                        Title = row.Title ?? string.Empty,
+                        Url = row.Url ?? string.Empty,
+                        ImageUrl = imageUrl
+                    };
                     bestByParent[groupKey] = (blog, row.Dist);
+                }
+                else if (!string.IsNullOrWhiteSpace(row.ImageUrl) && string.IsNullOrWhiteSpace(existing.post.ImageUrl))
+                {
+                    existing.post.ImageUrl = row.ImageUrl;
                 }
             }
         }
@@ -295,8 +308,10 @@ public sealed class CosmosDbService : IDisposable
         int chunkIndex,
         string title,
         string url,
-        float[] vector) =>
-        new()
+        string? imageUrl,
+        float[] vector)
+    {
+        var doc = new Dictionary<string, object?>
         {
             ["id"] = id,
             ["parent_post_id"] = parentPostId,
@@ -305,6 +320,13 @@ public sealed class CosmosDbService : IDisposable
             ["url"] = url,
             ["vector"] = vector
         };
+        if (!string.IsNullOrWhiteSpace(imageUrl))
+        {
+            doc["image_url"] = SanitizeFreeText(imageUrl.Trim());
+        }
+
+        return doc;
+    }
 
     private static void ValidateEmbedding(float[] vector)
     {
@@ -399,6 +421,9 @@ public sealed class CosmosDbService : IDisposable
 
         [JsonPropertyName("url")]
         public string? Url { get; set; }
+
+        [JsonPropertyName("image_url")]
+        public string? ImageUrl { get; set; }
 
         [JsonPropertyName("parent_post_id")]
         public string? ParentPostId { get; set; }

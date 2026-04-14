@@ -489,3 +489,4 @@ $RECYCLE.BIN/
 code/SemanticSearch.Web/publish-out
 code/pub-api-test
 code/SemanticSearch.Web/publish_test
+code/_build_out

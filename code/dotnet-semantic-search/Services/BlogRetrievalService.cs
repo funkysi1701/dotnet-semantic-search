@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using MicrosoftExtensionsAiSample.Models;
@@ -65,7 +66,8 @@ public static class BlogRetrievalService
                         Title = title,
                         Content = content,
                         Url = urlItem,
-                        Categories = categories
+                        Categories = categories,
+                        ImageUrl = TryExtractFirstImageUrl(content)
                     };
 
                     blogPost.GenerateCombinedText();
@@ -85,6 +87,38 @@ public static class BlogRetrievalService
 
         return blogPosts;
     }
+
+    /// <summary>First absolute http(s) URL from an <c>img</c> <c>src</c> in HTML (RSS description / content).</summary>
+    private static string? TryExtractFirstImageUrl(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return null;
+        }
+
+        var decoded = WebUtility.HtmlDecode(html);
+        foreach (Match m in ImgSrcInTag.Matches(decoded))
+        {
+            var raw = WebUtility.HtmlDecode(m.Groups["url"].Value.Trim());
+            if (string.IsNullOrEmpty(raw))
+            {
+                continue;
+            }
+
+            if (Uri.TryCreate(raw, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            {
+                return uri.ToString();
+            }
+        }
+
+        return null;
+    }
+
+    private static readonly Regex ImgSrcInTag = new(
+        """<img\b[^>]*\bsrc\s*=\s*(['"])(?<url>.*?)\1""",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(2));
 
     // Method to clean up invalid XML characters
     private static string CleanInvalidXmlCharacters(string xmlContent)

@@ -263,15 +263,48 @@ body {
 
 .results__card-link {
     display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    padding: 1rem 1.1rem;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem 1.1rem;
     border-radius: 10px;
     text-decoration: none;
     color: inherit;
     background: color-mix(in srgb, var(--surface) 92%, transparent);
     border: 1px solid var(--border);
     transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.results__card-link--no-image {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    padding: 1rem 1.1rem;
+}
+
+.results__card-media {
+    flex: 0 0 auto;
+    width: 7.5rem;
+    height: 4.9rem;
+    border-radius: 8px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--border) 40%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+}
+
+.results__card-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.results__card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 .results__card-link:hover {

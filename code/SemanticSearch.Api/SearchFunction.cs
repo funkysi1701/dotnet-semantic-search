@@ -40,7 +40,7 @@ public sealed class SearchFunction(
         var max = body.MaxResults is > 0 and <= 50 ? body.MaxResults : 10;
         var queryEmbedding = await embeddings.GenerateAsync(body.Query, cancellationToken: context.CancellationToken);
         var posts = await db.SearchSimilarBlogPostsAsync(queryEmbedding.Vector.ToArray(), maxResults: max);
-        var response = posts.Select(p => new SearchResultItem(p.Id, p.Title, p.Url)).ToList();
+        var response = posts.Select(p => new SearchResultItem(p.Id, p.Title, p.Url, p.ImageUrl)).ToList();
 
         var ok = req.CreateResponse(HttpStatusCode.OK);
         ok.Headers.Add("Content-Type", "application/json; charset=utf-8");
@@ -51,4 +51,4 @@ public sealed class SearchFunction(
 
 internal sealed record SearchRequest(string Query, int MaxResults = 10);
 
-internal sealed record SearchResultItem(string Id, string Title, string Url);
+internal sealed record SearchResultItem(string Id, string Title, string Url, string? ImageUrl = null);
