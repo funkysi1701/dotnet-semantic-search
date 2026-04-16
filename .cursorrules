@@ -1,0 +1,42 @@
+# dotnet-semantic-search — Cursor rules (repository)
+
+These rules apply to all edits in this repo. Prefer matching existing patterns: modern C# (nullable reference types, implicit usings where projects already enable them), **.NET 9**, **Microsoft.Extensions.AI**, and the layout under **`code/`**.
+
+## Solution layout and shared code
+
+- **Solution root:** `code/dotnet-semantic-search.sln`.
+- **`code/dotnet-semantic-search/`** — console app for RSS ingest, embeddings, and Cosmos writes; also the **shared class library** referenced by the API (`CosmosDbService`, `BlogRetrievalService`, models, chunking, etc.). **Changes here affect both the console app and `SemanticSearch.Api`.**
+- **`code/SemanticSearch.Api/`** — Azure Functions isolated worker (**`POST /api/search`**). Keep configuration split clear: `appsettings.Api*.json`, `host.json`, `local.settings.json` (local only; see `.gitignore`).
+- **`code/SemanticSearch.Web/`** — Blazor WebAssembly front end. Client config belongs in **`wwwroot/appsettings*.json`** (non-secret values only). **Do not** put API keys or Cosmos credentials in anything shipped to `wwwroot`.
+
+## Security and configuration
+
+- **Never** commit secrets: OpenAI keys, Cosmos keys/connection strings, or tokens. Use **user secrets** locally (`dotnet user-secrets`), environment variables for CI/shells, and Azure Static Web Apps / Function **application settings** for deploy. Follow naming and precedence described in **`code/README.md`**.
+- **`local.settings.json`** is for local Functions development only; keep real secrets out of committed copies (use placeholders or rely on gitignore as documented).
+- Treat **`SemanticSearch.Web`** as public: anything under **`wwwroot`** can be downloaded by browsers.
+
+## Cosmos DB, vectors, and embeddings
+
+- **Vector dimensions** (default **768**), embedding model, and Cosmos container vector policy must stay aligned. If you change dimensions or the embedding model, you typically need a **new container** (or database) and **re-ingestion** — document that in the same change if you touch defaults.
+- Container creation, partition key (`/id`), and `VectorDistance` query behavior live in **`CosmosDbService`**; extend there rather than duplicating Cosmos SQL in multiple places.
+
+## Blazor, Static Web Apps, and CI
+
+- GitHub Actions (`.github/workflows/azure-static-web-apps-*.yml`) **publishes** the Blazor client with **`dotnet publish`** so **`index.html`** and **`/_framework/*`** get correct fingerprinted asset names. **Do not** regress to uploading raw project **`wwwroot`** without publish if that would leave Blazor placeholders unfilled (see workflow comments).
+- **`api_location`** points at **`code/SemanticSearch.Api`** for the Functions API. Changes to routes, `host.json`, or package versions should remain compatible with **Azure Functions v4** and **.NET 9** as used in CI.
+- **`staticwebapp.config.json`** under the Web project governs routing and headers for SWA; keep it coherent with how the Blazor app calls **`/api/search`**.
+
+## Testing and verification
+
+- Before merging substantive changes: **`dotnet build code/dotnet-semantic-search.sln`** (or build/publish the specific projects you touched). If you change packages, run **`dotnet restore`** first so lockfiles and restore stay consistent.
+- After dependency or TFMs changes, confirm **`SemanticSearch.Web`** still **publishes** cleanly (`dotnet publish` as in the workflow) if CI would exercise that path.
+
+## Documentation (Markdown)
+
+- Tracked **`*.md`** files are part of the repo contract. When behavior changes (Cosmos setup, env vars, user secrets, SWA deploy, CI steps, embedding dimensions, or project layout), **update every affected Markdown file in the same change** so commands and paths stay accurate.
+- At minimum, keep **`code/README.md`** aligned when those areas shift; fix stale references in **`README.md`** at repo root if it still describes the solution.
+- Do **not** add new Markdown files unless the user or task explicitly asks for them; prefer updating existing docs.
+
+## Scope of changes
+
+- Make the smallest change that satisfies the task. Do not refactor unrelated code, rename unrelated identifiers, or add NuGet packages without a clear need.
