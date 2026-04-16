@@ -240,13 +240,13 @@ dotnet-semantic-search/
 - Update models for additional metadata fields
 
 ### SemanticSearch.Web — SEO (CI)
-- Public titles and descriptions are defined under **`Seo`** in **`SemanticSearch.Web/wwwroot/appsettings.json`**. **`Home.razor`** and **`NotFound.razor`** read those keys at runtime; the first-paint shell **`wwwroot/index.html`** must mirror the **home** values (Open Graph, Twitter, canonical link, and JSON-LD **`WebSite`**).
+- Public titles and descriptions are defined under **`Seo`** in **`SemanticSearch.Web/wwwroot/appsettings.json`**. **`Home.razor`** and **`NotFound.razor`** read those keys and emit **`<PageTitle>`** and **`<HeadContent>`** (Open Graph, Twitter, canonical, JSON-LD). **Do not** put the same home-route SEO tags in shell **`wwwroot/index.html`**: **`HeadOutlet`** is registered as **`head::after`**, so duplicated static tags would produce **two** **`<title>`** / **`<meta name="description">`** (and similar) in the document for crawlers.
 - Length rules enforced in CI: **`Seo:Home:PageTitle`** and **`Seo:NotFound:PageTitle`** are **50–60** characters inclusive; **`Seo:Home:MetaDescription`** and **`Seo:NotFound:MetaDescription`** are **110–160** characters inclusive.
 - From the **repository root**, run **`python scripts/check_seo_meta.py`** after changing SEO copy or **`index.html`**. GitHub Actions runs the same script before **`dotnet publish`** on Static Web Apps builds.
-- If you move the site to another hostname, update **`Seo:CanonicalBaseUrl`** and every absolute URL derived from it in **`index.html`**, then run the script until it passes.
+- If you move the site to another hostname, update **`Seo:CanonicalBaseUrl`** in **`appsettings.json`** (that drives **`Home.razor`** URLs), then run the script until it passes.
 
 ### SemanticSearch.Web — pre-rendered HTML at publish
-- The **`BlazorWasmPreRendering.Build`** package runs during **`dotnet publish`** and writes static HTML (including crawlers-visible content in **`<head>`** from **`HeadOutlet`**). **`Program.cs`** must keep service registration in a **`static void ConfigureServices(...)`** local function, as required by that package (see upstream README).
+- The **`BlazorWasmPreRendering.Build`** package runs during **`dotnet publish`** and writes static HTML (including a single, crawler-visible **`<head>`** for **`/`** and **`/not-found`** from **`HeadOutlet`** output). **`Program.cs`** must keep service registration in a **`static void ConfigureServices(...)`** local function, as required by that package (see upstream README).
 - **`BlazorWasmPrerenderingUrlPathToExplicitFetch`** includes **`/not-found`** because it is not linked from the home page.
 
 ## License
