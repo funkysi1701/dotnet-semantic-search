@@ -1,9 +1,28 @@
 ﻿@page "/"
 @using System.Net.Http.Json
+@using System.Text.Encodings.Web
 @inject HttpClient Http
 @inject IConfiguration Configuration
 
-<PageTitle>Search funkysi1701.com</PageTitle>
+<PageTitle>@_homePageTitle</PageTitle>
+<HeadContent>
+    <meta name="description" content="@_homeMetaDescription" />
+    <link rel="canonical" href="@_canonicalHomeUrl" />
+    <meta property="og:title" content="@_homePageTitle" />
+    <meta property="og:description" content="@_homeMetaDescription" />
+    <meta property="og:url" content="@_canonicalHomeUrl" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="@_shareImageUrl" />
+    <meta property="og:image:alt" content="@_shareImageAlt" />
+    <meta property="og:locale" content="en_GB" />
+    <meta property="og:site_name" content="@_siteName" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="@_homePageTitle" />
+    <meta name="twitter:description" content="@_homeMetaDescription" />
+    <meta name="twitter:image" content="@_shareImageUrl" />
+    <meta name="twitter:image:alt" content="@_shareImageAlt" />
+    <script type="application/ld+json">@((MarkupString)_jsonLd)</script>
+</HeadContent>
 
 <main class="page">
     <header class="hero">
@@ -94,7 +113,7 @@
                     <p>
                         Results come from a vector index in Azure Cosmos DB for NoSQL (database <code>semantic-search-blog</code>),
                         populated by a small .NET indexer that reads the site’s RSS feed and stores OpenAI embedding vectors.
-                        Your query is embedded the same way; closest vectors rank first — that is semantic search, not plain text matching.
+                        Your query is embedded the same way; closest vectors rank first — that is semantic search, not plain-text matching.
                     </p>
                 </div>
             </details>
@@ -108,12 +127,47 @@
 
 @code {
     private static readonly JsonSerializerOptions ApiJson = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions LdJsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    private string _homePageTitle = string.Empty;
+    private string _homeMetaDescription = string.Empty;
+    private string _canonicalHomeUrl = string.Empty;
+    private string _shareImageUrl = string.Empty;
+    private string _shareImageAlt = string.Empty;
+    private string _siteName = string.Empty;
+    private string _jsonLdSiteName = string.Empty;
+    private string _jsonLd = "{}";
 
     private string query = string.Empty;
     private bool isLoading;
     private bool hasSearched;
     private string? errorMessage;
     private readonly List<SearchResultItem> results = [];
+
+    protected override void OnInitialized()
+    {
+        _homePageTitle = Configuration["Seo:Home:PageTitle"]?.Trim() ?? string.Empty;
+        _homeMetaDescription = Configuration["Seo:Home:MetaDescription"]?.Trim() ?? string.Empty;
+        var baseUrl = Configuration["Seo:CanonicalBaseUrl"]?.Trim().TrimEnd('/') ?? string.Empty;
+        _canonicalHomeUrl = string.IsNullOrEmpty(baseUrl) ? string.Empty : $"{baseUrl}/";
+        _shareImageUrl = string.IsNullOrEmpty(baseUrl) ? string.Empty : $"{baseUrl}/favicon.svg";
+        _shareImageAlt = Configuration["Seo:ShareImageAlt"]?.Trim() ?? string.Empty;
+        _siteName = Configuration["Seo:OgSiteName"]?.Trim() ?? string.Empty;
+        _jsonLdSiteName = Configuration["Seo:JsonLdSiteName"]?.Trim() ?? string.Empty;
+
+        var ld = new Dictionary<string, string>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "WebSite",
+            ["name"] = _jsonLdSiteName,
+            ["url"] = _canonicalHomeUrl,
+            ["description"] = _homeMetaDescription,
+        };
+        _jsonLd = JsonSerializer.Serialize(ld, LdJsonOptions);
+    }
 
     private async Task SearchAsync()
     {

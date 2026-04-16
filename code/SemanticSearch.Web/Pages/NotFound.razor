@@ -1,4 +1,56 @@
 ﻿@page "/not-found"
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
 
-<h3>Not Found</h3>
-<p>Sorry, the content you are looking for does not exist.</p>
+<PageTitle>@_pageTitle</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex, follow" />
+    <meta name="description" content="@_metaDescription" />
+    <link rel="canonical" href="@_pageUrl" />
+    <meta property="og:title" content="@_pageTitle" />
+    <meta property="og:description" content="@_metaDescription" />
+    <meta property="og:url" content="@_pageUrl" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="@_shareImageUrl" />
+    <meta property="og:image:alt" content="@_shareImageAlt" />
+    <meta property="og:locale" content="en_GB" />
+    <meta property="og:site_name" content="@_siteName" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="@_pageTitle" />
+    <meta name="twitter:description" content="@_metaDescription" />
+    <meta name="twitter:image" content="@_shareImageUrl" />
+    <meta name="twitter:image:alt" content="@_shareImageAlt" />
+</HeadContent>
+
+<main class="page">
+    <header class="hero">
+        <p class="hero__eyebrow">Blog search</p>
+        <h1 class="hero__title">Page not found</h1>
+        <p class="hero__lede">
+            Sorry — that URL is not part of this app. Return to the search page to look for posts on funkysi1701.com by meaning.
+        </p>
+        <p class="hero__lede">
+            <a class="hero__site" href="/">Back to semantic search</a>
+        </p>
+    </header>
+</main>
+
+@code {
+    private string _pageTitle = string.Empty;
+    private string _metaDescription = string.Empty;
+    private string _pageUrl = string.Empty;
+    private string _shareImageUrl = string.Empty;
+    private string _shareImageAlt = string.Empty;
+    private string _siteName = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        _pageTitle = Configuration["Seo:NotFound:PageTitle"]?.Trim() ?? string.Empty;
+        _metaDescription = Configuration["Seo:NotFound:MetaDescription"]?.Trim() ?? string.Empty;
+        var baseUrl = Configuration["Seo:CanonicalBaseUrl"]?.Trim().TrimEnd('/') ?? string.Empty;
+        _shareImageUrl = string.IsNullOrEmpty(baseUrl) ? string.Empty : $"{baseUrl}/favicon.svg";
+        _shareImageAlt = Configuration["Seo:ShareImageAlt"]?.Trim() ?? string.Empty;
+        _siteName = Configuration["Seo:OgSiteName"]?.Trim() ?? string.Empty;
+        _pageUrl = Navigation.Uri;
+    }
+}

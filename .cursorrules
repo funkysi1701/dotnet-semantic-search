@@ -27,14 +27,25 @@ These rules apply to all edits in this repo. Prefer matching existing patterns: 
 - **`staticwebapp.config.json`** under the Web project governs routing and headers for SWA; keep it coherent with how the Blazor app calls **`/api/search`**.
 - **`robots.txt`:** Lives at **`code/SemanticSearch.Web/wwwroot/robots.txt`** (deployed as **`/robots.txt`**). It must stay **directly reachable** (HTTP **200**, plain text), not rewritten to **`index.html`**. Keep **`/robots.txt`** in **`navigationFallback.exclude`** in **`staticwebapp.config.json`** whenever that fallback is edited, and do not remove or relocate the file without replacing the public **`/robots.txt`** route.
 
+## SEO and meta (aligned with CI)
+
+- **Document `<title>` (all routes):** Every user-facing route must set a **non-empty** document title via **`<PageTitle>`** in the owning **`.razor`** page. Shell **`index.html`** must keep a matching **`<title>`** for the home URL (first paint before Blazor runs). **Source of truth for copy and lengths:** **`code/SemanticSearch.Web/wwwroot/appsettings.json`** under **`Seo`** (see **`Seo:Home`**, **`Seo:NotFound`**, **`Seo:CanonicalBaseUrl`**, **`Seo:OgSiteName`**, **`Seo:ShareImageAlt`**, **`Seo:JsonLdSiteName`**). **`Home.razor`** and **`NotFound.razor`** must read those values through **`IConfiguration`** so runtime head tags stay aligned.
+- **Home page (`/`):** **`Seo:Home:PageTitle`** must stay within **50–60 characters** (inclusive), and **`Seo:Home:MetaDescription`** within **110–160 characters** (inclusive). CI enforces this and checks that **`wwwroot/index.html`** matches **`appsettings.json`** for **`<title>`**, **`meta name="description"`**, **Open Graph** (**`og:title`**, **`og:description`**, **`og:url`**, **`og:type`**, **`og:image`**, **`og:image:alt`**, **`og:locale`**, **`og:site_name`**), **Twitter** (**`twitter:card`**, **`twitter:title`**, **`twitter:description`**, **`twitter:image`**, **`twitter:image:alt`**), **`<link rel="canonical">`**, and **JSON-LD** (**`WebSite`** with **`name`**, **`url`**, **`description`**). Run **`python scripts/check_seo_meta.py`** locally before merge when editing SEO.
+- **Not-found route (`/not-found`):** **`Seo:NotFound:PageTitle`** and **`Seo:NotFound:MetaDescription`** must satisfy the **same length bands** as the home strings. The page must emit **`<meta name="robots" content="noindex, follow">`** and use **exactly one** **`<h1>`** for the visible primary heading.
+- **Headings:** Keep **one** **`<h1>`** per page for the primary in-page title; use **`<h2>`**–**`<h6>`** for subsections (see existing **`Home.razor`** results heading).
+- **HTML `lang`:** **`wwwroot/index.html`** must use **`lang="en-GB"`** on **`<html>`**.
+- **Open Graph / Twitter / JSON-LD:** Follow the patterns already emitted from **`appsettings.json`**, **`index.html`**, and **`Home.razor`** **`HeadContent`**. When you add share imagery or new absolute hosts, update **`Seo:CanonicalBaseUrl`** (and any related URLs) consistently, re-run **`check_seo_meta.py`**, and keep **`staticwebapp.config.json`** coherent. Do not add inline trackers or third-party scripts without a clear need and review.
+- **Language:** User-visible copy and SEO strings use **British English** spelling and punctuation where a choice exists (e.g. **en-GB** in markup and **`og:locale`**); keep technical identifiers (API names, product names) as required by vendors.
+
 ## Testing and verification
 
 - Before merging substantive changes: **`dotnet build code/dotnet-semantic-search.sln`** (or build/publish the specific projects you touched). If you change packages, run **`dotnet restore`** first so lockfiles and restore stay consistent.
+- When **`appsettings.json`**, **`index.html`**, or SEO-related Razor under **`SemanticSearch.Web`** changes, run **`python scripts/check_seo_meta.py`** from the repo root; CI runs the same script before **`dotnet publish`**.
 - After dependency or TFMs changes, confirm **`SemanticSearch.Web`** still **publishes** cleanly (`dotnet publish` as in the workflow) if CI would exercise that path.
 
 ## Documentation (Markdown)
 
-- Tracked **`*.md`** files are part of the repo contract. When behavior changes (Cosmos setup, env vars, user secrets, SWA deploy, CI steps, embedding dimensions, or project layout), **update every affected Markdown file in the same change** so commands and paths stay accurate.
+- Tracked **`*.md`** files are part of the repo contract. When behavior changes (Cosmos setup, env vars, user secrets, SWA deploy, CI steps, embedding dimensions, **SEO or `check_seo_meta.py`**, or project layout), **update every affected Markdown file in the same change** so commands and paths stay accurate.
 - At minimum, keep **`code/README.md`** aligned when those areas shift; fix stale references in **`README.md`** at repo root if it still describes the solution.
 - Do **not** add new Markdown files unless the user or task explicitly asks for them; prefer updating existing docs.
 
