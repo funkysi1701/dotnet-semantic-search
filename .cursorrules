@@ -7,7 +7,7 @@ These rules apply to all edits in this repo. Prefer matching existing patterns: 
 - **Solution root:** `code/dotnet-semantic-search.sln`.
 - **`code/dotnet-semantic-search/`** — console app for RSS ingest, embeddings, and Cosmos writes; also the **shared class library** referenced by the API (`CosmosDbService`, `BlogRetrievalService`, models, chunking, etc.). **Changes here affect both the console app and `SemanticSearch.Api`.**
 - **`code/SemanticSearch.Api/`** — Azure Functions isolated worker (**`POST /api/search`**). Keep configuration split clear: `appsettings.Api*.json`, `host.json`, `local.settings.json` (local only; see `.gitignore`).
-- **`code/SemanticSearch.Web/`** — Blazor WebAssembly front end. Client config belongs in **`wwwroot/appsettings*.json`** (non-secret values only). **Do not** put API keys or Cosmos credentials in anything shipped to `wwwroot`.
+- **`code/SemanticSearch.Web/`** — Blazor WebAssembly front end. Client config belongs in **`wwwroot/appsettings*.json`** (non-secret values only). **Do not** put API keys or Cosmos credentials in anything shipped to **`wwwroot`**. **`BlazorWasmPreRendering.Build`** pre-renders on **`dotnet publish`**; keep **`Program.cs`** service registration in the **`static void ConfigureServices(...)`** local function pattern required by that package.
 
 ## Security and configuration
 

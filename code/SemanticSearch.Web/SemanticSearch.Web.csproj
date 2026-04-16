@@ -6,9 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <UserSecretsId>semantic-search-web-a7f2c9d0-4e1b-4d9c-8f3a-2b6e9c1d4f70</UserSecretsId>
+    <!-- Not linked from the home page; still emit static HTML for crawlers. -->
+    <BlazorWasmPrerenderingUrlPathToExplicitFetch>/not-found</BlazorWasmPrerenderingUrlPathToExplicitFetch>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="BlazorWasmPreRendering.Build" Version="7.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="9.0.15" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="9.0.15" PrivateAssets="all" />
   </ItemGroup>

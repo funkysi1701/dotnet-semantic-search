@@ -6,11 +6,19 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-var apiBase = builder.Configuration["ApiBaseUrl"];
-var baseUri = string.IsNullOrWhiteSpace(apiBase)
-    ? builder.HostEnvironment.BaseAddress
-    : apiBase.TrimEnd('/') + "/";
-
-builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(baseUri) });
+ConfigureServices(builder.Services, builder.HostEnvironment, builder.Configuration);
 
 await builder.Build().RunAsync();
+
+static void ConfigureServices(
+    IServiceCollection services,
+    IWebAssemblyHostEnvironment hostEnvironment,
+    IConfiguration configuration)
+{
+    var apiBase = configuration["ApiBaseUrl"];
+    var baseUri = string.IsNullOrWhiteSpace(apiBase)
+        ? hostEnvironment.BaseAddress
+        : apiBase.TrimEnd('/') + "/";
+
+    services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(baseUri) });
+}

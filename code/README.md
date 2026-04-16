@@ -239,6 +239,10 @@ dotnet-semantic-search/
 - From the **repository root**, run **`python scripts/check_seo_meta.py`** after changing SEO copy or **`index.html`**. GitHub Actions runs the same script before **`dotnet publish`** on Static Web Apps builds.
 - If you move the site to another hostname, update **`Seo:CanonicalBaseUrl`** and every absolute URL derived from it in **`index.html`**, then run the script until it passes.
 
+### SemanticSearch.Web — pre-rendered HTML at publish
+- The **`BlazorWasmPreRendering.Build`** package runs during **`dotnet publish`** and writes static HTML (including crawlers-visible content in **`<head>`** from **`HeadOutlet`**). **`Program.cs`** must keep service registration in a **`static void ConfigureServices(...)`** local function, as required by that package (see upstream README).
+- **`BlazorWasmPrerenderingUrlPathToExplicitFetch`** includes **`/not-found`** because it is not linked from the home page.
+
 ## License
 
 This project is for demonstration purposes. Check individual dependencies for their respective licenses.
