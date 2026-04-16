@@ -21,7 +21,7 @@ jobs:
           lfs: false
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - name: Verify SEO meta (appsettings + index.html)
         run: python scripts/check_seo_meta.py
       # Publish Blazor WASM here so index.html gets real script names (#[.{fingerprint}] is not sent to the server
