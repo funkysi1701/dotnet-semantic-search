@@ -40,6 +40,7 @@
             <label class="search__label" for="q">What are you looking for?</label>
             <div class="search__row">
                 <input id="q"
+                       @ref="_queryInput"
                        class="search__input"
                        @bind="query"
                        @bind:event="oninput"
@@ -141,6 +142,8 @@
     private string _jsonLdSiteName = string.Empty;
     private string _jsonLd = "{}";
 
+    private ElementReference _queryInput;
+
     private string query = string.Empty;
     private bool isLoading;
     private bool hasSearched;
@@ -167,6 +170,14 @@
             ["description"] = _homeMetaDescription,
         };
         _jsonLd = JsonSerializer.Serialize(ld, LdJsonOptions);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await _queryInput.FocusAsync();
+        }
     }
 
     private async Task SearchAsync()
