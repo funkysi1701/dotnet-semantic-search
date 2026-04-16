@@ -16,18 +16,24 @@ A .NET application demonstrating semantic search capabilities using AI embedding
 - **Framework**: .NET 9
 - **AI Integration**: Microsoft.Extensions.AI
 
+### Azure Static Web Apps and .NET version
+
+The **SemanticSearch.Api** project is deployed as the **Azure Functions** API behind **Azure Static Web Apps** (`api_location` in the GitHub workflow). That path is built and run on runtimes **supported by Static Web Apps for Functions**. **.NET 10 is not supported** for SWA-managed Functions today—keep **`SemanticSearch.Api`** on **`net9.0`** and use the **.NET 9 SDK** locally and in CI (see `.github/workflows` **`setup-dotnet`** with **`dotnet-version: 9.x`**). Do not retarget the API to **`net10.0`** expecting it to deploy until Microsoft documents **.NET 10** support for Azure Static Web Apps Functions.
+
+**Renovate** (see **`renovate.json`** at the repo root) limits relevant **NuGet** upgrades to versions **below 10.0.0** for Microsoft platform libraries (ASP.NET Core, Azure Functions worker, `System.*`, and most `Microsoft.Extensions.*`), so automated PRs do not move the stack to the **.NET 10** package wave. **`Microsoft.Extensions.AI`**, **`Microsoft.Extensions.AI.Abstractions`**, and **`Microsoft.Extensions.AI.OpenAI`** are excluded from that cap because they already use **10.x** versioning independently of the **.NET** runtime.
+
 ## Prerequisites
 
 ### Required
 - An [Azure Cosmos DB for NoSQL](https://learn.microsoft.com/azure/cosmos-db/how-to-create-account) account with **vector search** enabled ([EnableNoSQLVectorSearch](https://learn.microsoft.com/azure/cosmos-db/vector-search))
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) (recommended for this repo so local builds match CI and SWA)
 
 ### Verify Prerequisites
 ```bash
 # Check .NET
 dotnet --version
 
-# Should show .NET 9.0 or later
+# Should show .NET 9.x for this solution (see "Azure Static Web Apps and .NET version" above)
 ```
 
 ## Setup Instructions

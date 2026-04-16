@@ -2,5 +2,28 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Keep ASP.NET Core, Azure Functions worker, and System.* packages below v10 until SWA supports .NET 10",
+      "matchManagers": ["nuget"],
+      "matchPackagePrefixes": [
+        "Microsoft.AspNetCore.",
+        "Microsoft.Azure.Functions.",
+        "System."
+      ],
+      "allowedVersions": "<10.0.0"
+    },
+    {
+      "description": "Keep Microsoft.Extensions.* below v10 except Microsoft.Extensions.AI* (separate product line already on 10.x)",
+      "matchManagers": ["nuget"],
+      "matchPackagePrefixes": ["Microsoft.Extensions."],
+      "excludePackageNames": [
+        "Microsoft.Extensions.AI",
+        "Microsoft.Extensions.AI.Abstractions",
+        "Microsoft.Extensions.AI.OpenAI"
+      ],
+      "allowedVersions": "<10.0.0"
+    }
   ]
 }
