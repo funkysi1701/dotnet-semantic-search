@@ -5,6 +5,7 @@
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": [
+      "/robots.txt",
       "/api/*",
       "/_framework/*",
       "/css/*",

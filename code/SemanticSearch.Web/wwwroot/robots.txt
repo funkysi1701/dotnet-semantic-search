@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Search API is for the app only, not for crawling.
+Disallow: /api/

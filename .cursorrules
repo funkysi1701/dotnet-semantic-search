@@ -25,6 +25,7 @@ These rules apply to all edits in this repo. Prefer matching existing patterns: 
 - GitHub Actions (`.github/workflows/azure-static-web-apps-*.yml`) **publishes** the Blazor client with **`dotnet publish`** so **`index.html`** and **`/_framework/*`** get correct fingerprinted asset names. **Do not** regress to uploading raw project **`wwwroot`** without publish if that would leave Blazor placeholders unfilled (see workflow comments).
 - **`api_location`** points at **`code/SemanticSearch.Api`** for the Functions API. Changes to routes, `host.json`, or package versions should remain compatible with **Azure Functions v4** and **.NET 9** as used in CI.
 - **`staticwebapp.config.json`** under the Web project governs routing and headers for SWA; keep it coherent with how the Blazor app calls **`/api/search`**.
+- **`robots.txt`:** Lives at **`code/SemanticSearch.Web/wwwroot/robots.txt`** (deployed as **`/robots.txt`**). It must stay **directly reachable** (HTTP **200**, plain text), not rewritten to **`index.html`**. Keep **`/robots.txt`** in **`navigationFallback.exclude`** in **`staticwebapp.config.json`** whenever that fallback is edited, and do not remove or relocate the file without replacing the public **`/robots.txt`** route.
 
 ## Testing and verification
 
