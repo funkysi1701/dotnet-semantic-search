@@ -12,6 +12,16 @@
     <!-- If you add any scoped CSS files, uncomment the following to load them
     <link href="SemanticSearch.Web.styles.css" rel="stylesheet" /> -->
     <script type="importmap"></script>
+    <script>
+        if (window.location.hostname === "search.funkysi1701.com") {
+          var script = document.createElement("script");
+          script.defer = true;
+          script.async = true;
+          script.setAttribute("data-host", "search.funkysi1701.com");
+          script.src = "https://liteanalytics.com/lite.js";
+          document.head.appendChild(script);
+        }
+      </script>
 </head>
 
 <body>
