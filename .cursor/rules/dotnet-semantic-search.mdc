@@ -1,3 +1,8 @@
+---
+description: Repository-wide conventions for dotnet-semantic-search (.NET 9, SWA, Blazor, SEO, Cosmos, CI).
+alwaysApply: true
+---
+
 # dotnet-semantic-search — Cursor rules (repository)
 
 These rules apply to all edits in this repo. Prefer matching existing patterns: modern C# (nullable reference types, implicit usings where projects already enable them), **.NET 9**, **Microsoft.Extensions.AI**, and the layout under **`code/`**. **Do not** retarget **`SemanticSearch.Api`** (or the SWA **`api_location`** build) to **.NET 10**: **Azure Static Web Apps** does **not** support **.NET 10** for the managed **Azure Functions** API today—stay on **`net9.0`** and **`dotnet-version: 9.x`** in CI until Microsoft documents support.
