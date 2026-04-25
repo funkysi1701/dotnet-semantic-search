@@ -60,6 +60,14 @@
         <p class="message message--error" role="alert">@errorMessage</p>
     }
 
+    @if (isLoading)
+    {
+        <div class="search-loading" role="status" aria-live="polite">
+            <span class="search-loading__spinner" aria-hidden="true"></span>
+            <span class="search-loading__text">Fetching results…</span>
+        </div>
+    }
+
     @if (results.Count > 0)
     {
         <section class="results" aria-label="Search results">
@@ -193,6 +201,7 @@
 
         isLoading = true;
         hasSearched = true;
+        await InvokeAsync(StateHasChanged);
         try
         {
             var maxResults = GetConfiguredSearchMaxResults();

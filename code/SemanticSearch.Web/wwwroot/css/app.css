@@ -220,6 +220,35 @@ body {
     cursor: not-allowed;
 }
 
+.search-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+    font-size: 0.95rem;
+}
+
+.search-loading__spinner {
+    box-sizing: border-box;
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 2px solid color-mix(in srgb, var(--border) 85%, transparent);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: search-loading-spin 0.65s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes search-loading-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.search-loading__text {
+    color: #c5d4e8;
+}
+
 .message {
     margin-top: 1.25rem;
     font-size: 0.95rem;
