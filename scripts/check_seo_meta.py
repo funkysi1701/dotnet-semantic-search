@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Validate SEO strings in appsettings.json and ensure wwwroot/index.html does not duplicate
-home-route SEO (title/description/OG/Twitter/JSON-LD) that Blazor injects via HeadOutlet.
+Validate SEO strings in appsettings.json, ensure wwwroot/index.html does not duplicate
+home-route SEO (title/description/OG/Twitter/JSON-LD) that Blazor injects via HeadOutlet,
+and ensure sitemap.xml / robots.txt Sitemap stay aligned with Seo.CanonicalBaseUrl.
 
 Run from repo root:
 
@@ -18,6 +19,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APPSETTINGS = REPO_ROOT / "code" / "SemanticSearch.Web" / "wwwroot" / "appsettings.json"
 INDEX_HTML = REPO_ROOT / "code" / "SemanticSearch.Web" / "wwwroot" / "index.html"
+SITEMAP_XML = REPO_ROOT / "code" / "SemanticSearch.Web" / "wwwroot" / "sitemap.xml"
+ROBOTS_TXT = REPO_ROOT / "code" / "SemanticSearch.Web" / "wwwroot" / "robots.txt"
 
 TITLE_LEN = (50, 60)
 DESC_LEN = (110, 160)
@@ -29,6 +32,36 @@ def _len_in_range(label: str, text: str, bounds: tuple[int, int]) -> None:
     if not lo <= n <= hi:
         print(f"ERROR: {label} length {n} not in [{lo}, {hi}] inclusive.", file=sys.stderr)
         print(f"  Value: {text!r}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _assert_sitemap_and_robots_match_base(base: str) -> None:
+    """sitemap.xml and robots.txt must use the same origin as Seo.CanonicalBaseUrl."""
+    if not SITEMAP_XML.is_file():
+        print(f"ERROR: Missing {SITEMAP_XML}", file=sys.stderr)
+        sys.exit(1)
+    if not ROBOTS_TXT.is_file():
+        print(f"ERROR: Missing {ROBOTS_TXT}", file=sys.stderr)
+        sys.exit(1)
+
+    home_loc = f"{base}/"
+    sitemap = SITEMAP_XML.read_text(encoding="utf-8")
+    if f"<loc>{home_loc}</loc>" not in sitemap:
+        print(
+            "ERROR: sitemap.xml must include exactly one home URL as "
+            f"<loc>{home_loc}</loc> (match Seo.CanonicalBaseUrl).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    sitemap_line = f"Sitemap: {base}/sitemap.xml"
+    robots = ROBOTS_TXT.read_text(encoding="utf-8")
+    if sitemap_line not in robots:
+        print(
+            "ERROR: robots.txt must contain this line (match Seo.CanonicalBaseUrl):\n"
+            f"  {sitemap_line}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 
@@ -125,9 +158,13 @@ def main() -> None:
         sys.exit(1)
 
     _assert_index_has_no_duplicate_seo(html)
+    _assert_sitemap_and_robots_match_base(base)
 
     print("SEO check OK:", APPSETTINGS.relative_to(REPO_ROOT))
-    print("  (appsettings lengths; index.html has no duplicate home SEO vs HeadOutlet)")
+    print(
+        "  (appsettings lengths; index.html has no duplicate home SEO vs HeadOutlet; "
+        "sitemap.xml / robots Sitemap match CanonicalBaseUrl)"
+    )
 
 
 if __name__ == "__main__":

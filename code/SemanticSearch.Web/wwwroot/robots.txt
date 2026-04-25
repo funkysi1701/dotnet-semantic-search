@@ -3,3 +3,5 @@ Allow: /
 
 # Search API is for the app only, not for crawling.
 Disallow: /api/
+
+Sitemap: https://search.funkysi1701.com/sitemap.xml

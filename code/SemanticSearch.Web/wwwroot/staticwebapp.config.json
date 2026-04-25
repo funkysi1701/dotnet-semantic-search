@@ -6,6 +6,7 @@
     "rewrite": "/index.html",
     "exclude": [
       "/robots.txt",
+      "/sitemap.xml",
       "/api/*",
       "/_framework/*",
       "/css/*",
