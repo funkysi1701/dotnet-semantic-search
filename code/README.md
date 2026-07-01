@@ -152,6 +152,20 @@ The application provides a simple menu interface:
 ### 3. 🚪 Exit
 - Cleanly exits the application
 
+### Headless reindex (CI / scheduled jobs)
+
+For automation (no menu prompts), run from **`code/dotnet-semantic-search`**:
+
+```bash
+dotnet run -- --reindex --clear
+```
+
+- **`--reindex`** — fetch RSS, generate embeddings, upsert into Cosmos DB, then exit.
+- **`--clear`** — delete all existing vectors first (required when stdin is redirected; avoids duplicate chunk rows on multi-chunk posts).
+- **`--help`** — show CLI usage.
+
+Set **`COSMOS_CONNECTION_STRING`** and **`OPENAI_API_KEY`** in the environment (or the same keys via user secrets locally). GitHub Actions uses repo secrets with those names; see **`.github/workflows/reindex-scheduled.yml`** (daily **03:00 UTC** by default, plus manual **workflow_dispatch**).
+
 ## Configuration
 
 ### RSS Feed Source

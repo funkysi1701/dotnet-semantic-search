@@ -4,6 +4,13 @@ using MicrosoftExtensionsAiSample.Utils;
 using MicrosoftExtensionsAiSample.Services;
 using MicrosoftExtensionsAiSample.Models;
 
+var cli = CliOptions.Parse(args);
+if (cli.ShowHelp)
+{
+    PrintCliHelp();
+    return;
+}
+
 // Order matters: environment variables first, then user secrets, so local secrets override
 // empty or placeholder machine env (e.g. Cosmos__ConnectionString=). CI agents without a
 // secrets store still get values from environment only.
@@ -36,6 +43,7 @@ catch (Exception ex)
     Console.WriteLine("Or set COSMOS_CONNECTION_STRING / COSMOS_ENDPOINT + COSMOS_KEY in the environment.");
     Console.WriteLine("If secrets exist but are ignored, remove empty Cosmos__ConnectionString / COSMOS_* from machine or user environment.");
     Console.WriteLine("Enable vector search on the account (EnableNoSQLVectorSearch) if queries fail.");
+    ExitIfReindex(cli, 1);
     return;
 }
 
@@ -48,13 +56,38 @@ catch (Exception ex)
 {
     Console.WriteLine($"❌ Failed to configure OpenAI embeddings: {ex.Message}");
     Console.WriteLine("Set OPENAI_API_KEY or OpenAI:ApiKey (user secrets: dotnet user-secrets set \"OpenAI:ApiKey\" \"...\" --project dotnet-semantic-search.csproj).");
+    ExitIfReindex(cli, 1);
     return;
 }
 
-ConsoleHelper.ShowHeader();
-
 var maxEmbeddingConcurrency = GetMaxEmbeddingConcurrency(configuration);
 var indexTitleAuxVectors = configuration.GetValue("Search:IndexTitleAuxVectors", true);
+
+if (cli.Reindex)
+{
+    var clearExisting = cli.Clear;
+    if (!clearExisting.HasValue)
+    {
+        if (Console.IsInputRedirected)
+        {
+            Console.Error.WriteLine("❌ Non-interactive reindex requires --clear (multi-chunk posts duplicate without a full clear).");
+            Environment.Exit(1);
+        }
+
+        clearExisting = PromptClearExisting();
+    }
+
+    var success = await ProcessBlogsAsync(
+        embeddingGenerator,
+        vectorService,
+        maxEmbeddingConcurrency,
+        indexTitleAuxVectors,
+        clearExisting.Value);
+    vectorService.Dispose();
+    Environment.Exit(success ? 0 : 1);
+}
+
+ConsoleHelper.ShowHeader();
 
 // Main menu loop
 while (true)
@@ -70,7 +103,12 @@ while (true)
     switch (choice)
     {
         case "1":
-            await ProcessBlogsAsync(embeddingGenerator, vectorService, maxEmbeddingConcurrency, indexTitleAuxVectors);
+            await ProcessBlogsAsync(
+                embeddingGenerator,
+                vectorService,
+                maxEmbeddingConcurrency,
+                indexTitleAuxVectors,
+                PromptClearExisting());
             break;
 
         case "2":
@@ -90,19 +128,54 @@ while (true)
     PauseIfInteractive("\nPress any key to continue...");
 }
 
-static async Task ProcessBlogsAsync(
+static bool PromptClearExisting()
+{
+    Console.Write("🗑️  Do you want to clear existing blog posts first? (y/N): ");
+    var clearResponse = Console.ReadLine()?.ToLower();
+    return clearResponse is "y" or "yes";
+}
+
+static void ExitIfReindex(CliOptions cli, int exitCode)
+{
+    if (cli.Reindex)
+    {
+        Environment.Exit(exitCode);
+    }
+}
+
+static void PrintCliHelp()
+{
+    Console.WriteLine("""
+        dotnet-semantic-search — ingest RSS posts into Cosmos DB vector search.
+
+        Interactive (default):
+          dotnet run
+
+        Headless reindex (CI / scheduled jobs):
+          dotnet run -- --reindex --clear
+
+        Options:
+          --reindex   Fetch RSS, generate embeddings, and upsert into Cosmos DB, then exit.
+          --clear     Delete all existing vectors before reindexing (required when stdin is redirected).
+          --help, -h  Show this help.
+
+        Configuration: appsettings.json, environment variables, and user secrets (see code/README.md).
+        Secrets for CI: COSMOS_CONNECTION_STRING and OPENAI_API_KEY.
+        """);
+}
+
+static async Task<bool> ProcessBlogsAsync(
     IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
     CosmosDbService vectorService,
     int maxEmbeddingConcurrency,
-    bool indexTitleAuxVectors)
+    bool indexTitleAuxVectors,
+    bool clearExisting)
 {
     try
     {
         Console.WriteLine("📚 Processing Blog Posts...\n");
 
-        Console.Write("🗑️  Do you want to clear existing blog posts first? (y/N): ");
-        var clearResponse = Console.ReadLine()?.ToLower();
-        if (clearResponse == "y" || clearResponse == "yes")
+        if (clearExisting)
         {
             Console.WriteLine("🧹 Clearing existing blog posts...");
             await vectorService.ClearAllDataAsync();
@@ -170,10 +243,12 @@ static async Task ProcessBlogsAsync(
         }
 
         Console.WriteLine($"\n✅ Successfully processed {processedCount} out of {blogPosts.Count} blog posts");
+        return true;
     }
     catch (Exception ex)
     {
         Console.WriteLine($"❌ Error in ProcessBlogsAsync: {ex.Message}");
+        return false;
     }
 }
 
@@ -311,5 +386,43 @@ static void PauseIfInteractive(string message)
     catch (InvalidOperationException)
     {
         // No interactive console attached; do not attempt to read a key.
+    }
+}
+
+file sealed class CliOptions
+{
+    public bool Reindex { get; init; }
+    public bool? Clear { get; init; }
+    public bool ShowHelp { get; init; }
+
+    public static CliOptions Parse(string[] args)
+    {
+        var reindex = false;
+        bool? clear = null;
+        var showHelp = false;
+
+        foreach (var arg in args)
+        {
+            switch (arg)
+            {
+                case "--reindex":
+                    reindex = true;
+                    break;
+                case "--clear":
+                    clear = true;
+                    break;
+                case "--help":
+                case "-h":
+                    showHelp = true;
+                    break;
+                default:
+                    Console.Error.WriteLine($"❌ Unknown argument: {arg}");
+                    Console.Error.WriteLine("Use --help for usage.");
+                    Environment.Exit(2);
+                    break;
+            }
+        }
+
+        return new CliOptions { Reindex = reindex, Clear = clear, ShowHelp = showHelp };
     }
 }

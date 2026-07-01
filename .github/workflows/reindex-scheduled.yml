@@ -1,0 +1,25 @@
+name: Scheduled blog reindex
+
+on:
+  schedule:
+    # Daily at 03:00 UTC — adjust cron to taste (minute hour day month weekday).
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  reindex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "9.x"
+
+      - name: Reindex blog embeddings
+        working-directory: code/dotnet-semantic-search
+        env:
+          COSMOS_CONNECTION_STRING: ${{ secrets.COSMOS_CONNECTION_STRING }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: dotnet run --configuration Release -- --reindex --clear
