@@ -19,7 +19,7 @@ jobs:
         with:
           submodules: true
           lfs: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
       - name: Verify SEO meta (appsettings + index.html)
