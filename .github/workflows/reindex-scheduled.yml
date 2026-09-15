@@ -15,7 +15,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "9.x"
+          dotnet-version: "10.0.401"
 
       - name: Reindex blog embeddings
         working-directory: code/dotnet-semantic-search

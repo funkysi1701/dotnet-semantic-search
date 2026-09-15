@@ -28,7 +28,7 @@ jobs:
       # if placeholders were left in place, the browser would only request /_framework/blazor.webassembly → 404).
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "9.x"
+          dotnet-version: "10.0.401"
       - name: Publish Blazor client
         run: dotnet publish code/SemanticSearch.Web/SemanticSearch.Web.csproj -c Release -o blazor-publish
       - name: Build And Deploy
