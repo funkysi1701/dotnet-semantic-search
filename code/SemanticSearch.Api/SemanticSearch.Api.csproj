@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\dotnet-semantic-search\dotnet-semantic-search.csproj" />
+    <ProjectReference Include="..\dotnet-semantic-search\Core\DotnetSemanticSearch.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
