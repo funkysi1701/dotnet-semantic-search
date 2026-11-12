@@ -13,27 +13,27 @@ A .NET application demonstrating semantic search capabilities using AI embedding
 
 - **Vector Database**: Azure Cosmos DB for NoSQL (`VectorDistance` queries, 768-d cosine)
 - **AI Embeddings**: OpenAI `text-embedding-3-small` shortened to 768 dimensions (matches Cosmos vector index)
-- **Framework**: .NET 9
+- **Framework**: .NET 11 (console app and Blazor WebAssembly client); .NET 10 for the Static Web Apps-managed Functions API
 - **AI Integration**: Microsoft.Extensions.AI
 
 ### Azure Static Web Apps and .NET version
 
-The **SemanticSearch.Api** project is deployed as the **Azure Functions** API behind **Azure Static Web Apps** (`api_location` in the GitHub workflow). That path is built and run on runtimes **supported by Static Web Apps for Functions**. **.NET 10 is not supported** for SWA-managed Functions today—keep **`SemanticSearch.Api`** on **`net9.0`** and use the **.NET 9 SDK** locally and in CI (see `.github/workflows` **`setup-dotnet`** with **`dotnet-version: 9.x`**). Do not retarget the API to **`net10.0`** expecting it to deploy until Microsoft documents **.NET 10** support for Azure Static Web Apps Functions.
+The **SemanticSearch.Api** project is deployed as a managed **Azure Functions** API behind **Azure Static Web Apps** (`api_location` in the GitHub workflow). The console app and Blazor client target **`net11.0`**. The API targets **`net10.0`** to match Static Web Apps' [newest listed managed Functions runtime](https://learn.microsoft.com/azure/static-web-apps/languages-runtimes). Its `dotnet-semantic-search/Core` project compiles the shared services for .NET 10, allowing the Static Web Apps Oryx build to use its .NET 10 SDK without attempting to build the console app's .NET 11 target. The API's `apiRuntime` is set to `dotnet-isolated:10.0` in `staticwebapp.config.json`. Moving the API to .NET 11 requires Static Web Apps managed Functions support for .NET 11 or moving it to a separately hosted Functions app. The .NET 11 SDK is used locally and in CI.
 
-**Renovate** (see **`renovate.json`** at the repo root) limits relevant **NuGet** upgrades to versions **below 10.0.0** for Microsoft platform libraries (ASP.NET Core, Azure Functions worker, `System.*`, and most `Microsoft.Extensions.*`), so automated PRs do not move the stack to the **.NET 10** package wave. **`Microsoft.Extensions.AI`**, **`Microsoft.Extensions.AI.Abstractions`**, and **`Microsoft.Extensions.AI.OpenAI`** are excluded from that cap because they already use **10.x** versioning independently of the **.NET** runtime.
+**Renovate** (see **`renovate.json`** at the repo root) limits relevant **NuGet** upgrades to versions **below 12.0.0** for Microsoft platform libraries, keeping dependency updates within the current .NET 11 generation.
 
 ## Prerequisites
 
 ### Required
 - An [Azure Cosmos DB for NoSQL](https://learn.microsoft.com/azure/cosmos-db/how-to-create-account) account with **vector search** enabled ([EnableNoSQLVectorSearch](https://learn.microsoft.com/azure/cosmos-db/vector-search))
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) (recommended for this repo so local builds match CI and SWA)
+- [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) (used for local builds and CI; the managed Functions API targets .NET 10)
 
 ### Verify Prerequisites
 ```bash
 # Check .NET
 dotnet --version
 
-# Should show .NET 9.x for this solution (see "Azure Static Web Apps and .NET version" above)
+# Should show .NET 11.x for this repository
 ```
 
 ## Setup Instructions

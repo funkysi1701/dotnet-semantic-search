@@ -5,17 +5,17 @@
   ],
   "packageRules": [
     {
-      "description": "Keep ASP.NET Core, Azure Functions worker, and System.* packages below v10 until SWA supports .NET 10",
+      "description": "Keep ASP.NET Core, Azure Functions worker, and System.* packages below v12 while the application targets .NET 11",
       "matchManagers": ["nuget"],
       "matchPackagePrefixes": [
         "Microsoft.AspNetCore.",
         "Microsoft.Azure.Functions.",
         "System."
       ],
-      "allowedVersions": "<10.0.0"
+      "allowedVersions": "<12.0.0"
     },
     {
-      "description": "Keep Microsoft.Extensions.* below v10 except Microsoft.Extensions.AI* (separate product line already on 10.x)",
+      "description": "Keep Microsoft.Extensions.* below v12 except Microsoft.Extensions.AI*",
       "matchManagers": ["nuget"],
       "matchPackagePrefixes": ["Microsoft.Extensions."],
       "excludePackageNames": [
@@ -23,7 +23,7 @@
         "Microsoft.Extensions.AI.Abstractions",
         "Microsoft.Extensions.AI.OpenAI"
       ],
-      "allowedVersions": "<10.0.0"
+      "allowedVersions": "<12.0.0"
     }
   ]
 }

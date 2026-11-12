@@ -11,7 +11,7 @@ var host = new HostBuilder()
     .ConfigureAppConfiguration((_, config) =>
     {
         config.SetBasePath(AppContext.BaseDirectory);
-        // Use appsettings.Api*.json so publish does not collide with referenced dotnet-semantic-search/appsettings.json (NETSDK1152).
+        // Keep the Functions configuration isolated from the console app settings.
         config.AddJsonFile("appsettings.Api.json", optional: false, reloadOnChange: false);
         var env = Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT")
             ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
