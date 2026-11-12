@@ -2,7 +2,7 @@
 ### Previously: Fuzzy Wuzzy Was a Search: Semantic Search in .NET
 Talk by Jonathan "J." Tower
 
-**Repository:** the companion demo app lives under **`code/`**. Build, Azure, and SDK notes (including that **Azure Static Web Apps does not support .NET 10 for the Functions API**—use **.NET 9** for deploy) are in **[`code/README.md`](code/README.md)**.
+**Repository:** the companion demo app lives under **`code/`**. Build, Azure, and SDK notes (including that the console and web app target **.NET 11** while the Static Web Apps-managed Functions API targets **.NET 10**) are in **[`code/README.md`](code/README.md)**.
 
 Searching isn't just about exact matches anymore—users expect search results that understand context and adapt to their input. Enter the world of AI-driven fuzzy search! In this session, we’ll explore how to implement powerful search capabilities in .NET using Microsoft.Extensions.AI, OpenAI embeddings, ChatGPT, and vectorization techniques. 
 
