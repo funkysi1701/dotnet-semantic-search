@@ -172,13 +172,13 @@ Set **`COSMOS_CONNECTION_STRING`** and **`OPENAI_API_KEY`** in the environment (
 |------|------|---------|
 | Secret | `COSMOS_CONNECTION_STRING` | App connection to Cosmos |
 | Secret | `OPENAI_API_KEY` | Embeddings |
-| Secret | `AZURE_CLIENT_ID` | App registration for OIDC login |
-| Secret | `AZURE_TENANT_ID` | Entra tenant |
-| Secret | `AZURE_SUBSCRIPTION_ID` | Subscription containing the Cosmos account |
+| Variable | `AZURE_CLIENT_ID` | Entra app (service principal) client id for OIDC login |
+| Variable | `AZURE_TENANT_ID` | Entra tenant |
+| Variable | `AZURE_SUBSCRIPTION_ID` | Subscription containing the Cosmos account |
 | Variable | `COSMOS_ACCOUNT_NAME` | Cosmos account name (e.g. `episodetracker`) |
 | Variable | `COSMOS_RESOURCE_GROUP` | Resource group of that account |
 
-Create an app registration with a **federated credential** for this repo’s `reindex-scheduled.yml` (issuer `https://token.actions.githubusercontent.com`, subject `repo:<owner>/<repo>:ref:refs/heads/main` or the environment you use), and grant it **DocumentDB Account Contributor** (or equivalent) on the Cosmos account so it can update firewall IP rules. Each `az cosmosdb update` of the IP filter can take several minutes.
+Reuse the same Entra app as Episode Atlas Terraform OIDC if you like (`EpisodeAtlas-Terraform-GitHub`), but add a **federated credential** whose subject **exactly** matches the workflow assertion (for this repo on `main`: `repo:funkysi1701/dotnet-semantic-search:ref:refs/heads/main`; issuer `https://token.actions.githubusercontent.com`; audience `api://AzureADTokenExchange`). Grant the SP **DocumentDB Account Contributor** on the Cosmos account so it can update firewall IP rules. Each `az cosmosdb update` of the IP filter can take several minutes.
 
 ## Configuration
 
