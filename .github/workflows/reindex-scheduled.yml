@@ -6,6 +6,10 @@ on:
     - cron: "0 3 * * *"
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   reindex:
     runs-on: ubuntu-latest
@@ -17,9 +21,82 @@ jobs:
         with:
           dotnet-version: "11.0.100"
 
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # GitHub-hosted runners get a new public IP each job; Cosmos firewall blocks unknown IPs (403).
+      # Snapshot existing rules, append this runner, then restore the snapshot in the cleanup step.
+      # az cosmosdb update can take several minutes per call.
+      - name: Allow runner IP on Cosmos DB firewall
+        id: cosmos_firewall
+        env:
+          COSMOS_ACCOUNT_NAME: ${{ vars.COSMOS_ACCOUNT_NAME }}
+          COSMOS_RESOURCE_GROUP: ${{ vars.COSMOS_RESOURCE_GROUP }}
+        run: |
+          set -euo pipefail
+          if [ -z "${COSMOS_ACCOUNT_NAME}" ] || [ -z "${COSMOS_RESOURCE_GROUP}" ]; then
+            echo "::error::Set repository variables COSMOS_ACCOUNT_NAME and COSMOS_RESOURCE_GROUP"
+            exit 1
+          fi
+
+          RUNNER_IP="$(curl -4 -fsS https://api.ipify.org)"
+          if [[ ! "$RUNNER_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Could not resolve runner public IPv4 (got: ${RUNNER_IP})"
+            exit 1
+          fi
+          echo "Runner public IP: ${RUNNER_IP}"
+
+          CURRENT_IPS="$(az cosmosdb show \
+            --name "${COSMOS_ACCOUNT_NAME}" \
+            --resource-group "${COSMOS_RESOURCE_GROUP}" \
+            --query "ipRules[].ipAddressOrRange" \
+            -o tsv | paste -sd, -)"
+          echo "Existing firewall IP rules: ${CURRENT_IPS:-"(none)"}"
+
+          {
+            echo "RUNNER_IP=${RUNNER_IP}"
+            echo "CURRENT_IPS=${CURRENT_IPS}"
+          } >> "${GITHUB_ENV}"
+
+          if [ -z "${CURRENT_IPS}" ]; then
+            DESIRED_IPS="${RUNNER_IP}"
+          elif echo ",${CURRENT_IPS}," | grep -Fq ",${RUNNER_IP},"; then
+            echo "Runner IP already present; leaving firewall unchanged"
+            DESIRED_IPS="${CURRENT_IPS}"
+            echo "firewall_changed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          else
+            DESIRED_IPS="${CURRENT_IPS},${RUNNER_IP}"
+          fi
+
+          echo "Updating Cosmos firewall (may take several minutes)…"
+          az cosmosdb update \
+            --name "${COSMOS_ACCOUNT_NAME}" \
+            --resource-group "${COSMOS_RESOURCE_GROUP}" \
+            --ip-range-filter "${DESIRED_IPS}"
+          echo "firewall_changed=true" >> "${GITHUB_OUTPUT}"
+
       - name: Reindex blog embeddings
         working-directory: code/dotnet-semantic-search
         env:
           COSMOS_CONNECTION_STRING: ${{ secrets.COSMOS_CONNECTION_STRING }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: dotnet run --configuration Release -- --reindex --clear
+
+      - name: Remove runner IP from Cosmos DB firewall
+        if: always() && steps.cosmos_firewall.outcome == 'success' && steps.cosmos_firewall.outputs.firewall_changed != 'false'
+        env:
+          COSMOS_ACCOUNT_NAME: ${{ vars.COSMOS_ACCOUNT_NAME }}
+          COSMOS_RESOURCE_GROUP: ${{ vars.COSMOS_RESOURCE_GROUP }}
+        run: |
+          set -euo pipefail
+          echo "Restoring Cosmos firewall to prior rules: ${CURRENT_IPS:-"(none)"} (may take several minutes)…"
+          # Empty filter must be passed explicitly so az clears IP rules rather than leaving the runner IP.
+          az cosmosdb update \
+            --name "${COSMOS_ACCOUNT_NAME}" \
+            --resource-group "${COSMOS_RESOURCE_GROUP}" \
+            --ip-range-filter "${CURRENT_IPS:-}"

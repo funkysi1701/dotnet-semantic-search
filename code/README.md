@@ -166,6 +166,20 @@ dotnet run -- --reindex --clear
 
 Set **`COSMOS_CONNECTION_STRING`** and **`OPENAI_API_KEY`** in the environment (or the same keys via user secrets locally). GitHub Actions uses repo secrets with those names; see **`.github/workflows/reindex-scheduled.yml`** (daily **03:00 UTC** by default, plus manual **workflow_dispatch**).
 
+**Scheduled reindex and Cosmos firewall:** GitHub-hosted runners use a new public IP each job. If the Cosmos account networking is restricted, the workflow temporarily allowlists the runner IP (via Azure CLI), runs reindex, then restores the previous IP filter. That needs:
+
+| Kind | Name | Purpose |
+|------|------|---------|
+| Secret | `COSMOS_CONNECTION_STRING` | App connection to Cosmos |
+| Secret | `OPENAI_API_KEY` | Embeddings |
+| Secret | `AZURE_CLIENT_ID` | App registration for OIDC login |
+| Secret | `AZURE_TENANT_ID` | Entra tenant |
+| Secret | `AZURE_SUBSCRIPTION_ID` | Subscription containing the Cosmos account |
+| Variable | `COSMOS_ACCOUNT_NAME` | Cosmos account name (e.g. `episodetracker`) |
+| Variable | `COSMOS_RESOURCE_GROUP` | Resource group of that account |
+
+Create an app registration with a **federated credential** for this repo’s `reindex-scheduled.yml` (issuer `https://token.actions.githubusercontent.com`, subject `repo:<owner>/<repo>:ref:refs/heads/main` or the environment you use), and grant it **DocumentDB Account Contributor** (or equivalent) on the Cosmos account so it can update firewall IP rules. Each `az cosmosdb update` of the IP filter can take several minutes.
+
 ## Configuration
 
 ### RSS Feed Source
@@ -183,6 +197,7 @@ The application is configured to process blog posts from Trailhead Technology's 
 - Confirm **vector search** is enabled on the account and wait for the capability to apply.
 - Ensure credentials are available: `dotnet user-secrets list --project code/dotnet-semantic-search/dotnet-semantic-search.csproj`, or `COSMOS_CONNECTION_STRING` / `COSMOS_ENDPOINT` + `COSMOS_KEY` in the environment for the same process as `dotnet run`.
 - If user secrets are set but the app still cannot connect, check for **empty** `Cosmos__ConnectionString`, `COSMOS_CONNECTION_STRING`, or `COSMOS_KEY` in **user or machine** environment variables (they used to override secrets when env was applied last; the app now applies secrets after env, but clearing stale empty vars still avoids confusion).
+- **`403 Forbidden` / firewall / “Request originated from IP … blocked”**: the caller’s public IP is not on the Cosmos account networking allowlist. For local use, add your IP in the portal (**Networking**). For **`.github/workflows/reindex-scheduled.yml`**, ensure the Azure OIDC secrets and `COSMOS_ACCOUNT_NAME` / `COSMOS_RESOURCE_GROUP` variables are set so the job can allowlist and remove the runner IP automatically.
 - Vector indexing applies only to **new** containers; if you change vector settings, use a new container name or database and re-ingest.
 
 ### OpenAI / embedding issues
